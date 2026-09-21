@@ -1,0 +1,161 @@
+services:
+
+  # =========================
+  # MYSQL
+  # =========================
+  mysql:
+    image: mysql:8.4
+    container_name: andesstay-mysql
+    restart: unless-stopped
+
+    environment:
+      MYSQL_DATABASE: andesstay
+      MYSQL_ROOT_PASSWORD: root
+
+    ports:
+      - "3306:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # =========================
+  # RABBITMQ
+  # =========================
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: andesstay-rabbitmq
+    
+
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  # =========================
+  # ZOOKEEPER
+  # =========================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: andesstay-zookeeper
+    
+
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+    ports:
+      - "2181:2181"
+
+  # =========================
+  # KAFKA
+  # =========================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: andesstay-kafka
+    
+
+    depends_on:
+      - zookeeper
+
+    ports:
+      - "9092:9092"
+
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # =========================
+  # BACKEND
+  # =========================
+  backend:
+    image: andesstay-backend:latest
+    container_name: andesstay-backend
+    restart: unless-stopped
+
+    depends_on:
+      - mysql
+      - rabbitmq
+      - kafka
+
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/andesstay
+      DB_USERNAME: root
+      DB_PASSWORD: root
+
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+    ports:
+      - "8080:8080"
+
+  # =========================
+  # BFF
+  # =========================
+  bff:
+    image: andesstay-bff:latest
+    container_name: andesstay-bff
+    restart: unless-stopped
+
+    depends_on:
+      - backend
+
+    environment:
+      BACKEND_URL: http://backend:8080
+
+    ports:
+      - "8090:8090"
+
+  # =========================
+  # RABBITMQ ADMIN
+  # =========================
+  rabbit-admin:
+    image: andesstay-rabbit-admin:latest
+    container_name: andesstay-rabbit-admin
+    
+
+    depends_on:
+      - rabbitmq
+
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+
+    ports:
+      - "8091:8091"
+
+  # =========================
+  # KAFKA ADMIN
+  # =========================
+  kafka-admin:
+    image: andesstay-kafka-admin:latest
+    container_name: andesstay-kafka-admin
+    
+
+    depends_on:
+      - kafka
+
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+    ports:
+      - "8092:8092"
+
+
+volumes:
+
+  mysql_data:

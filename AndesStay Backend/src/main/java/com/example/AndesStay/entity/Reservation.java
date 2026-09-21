@@ -1,0 +1,91 @@
+package com.example.AndesStay.entity;
+
+import jakarta.persistence.*;
+
+import java.time.LocalDate;
+
+@Entity
+@Table(name = "RESERVATIONS")
+public class Reservation {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private String guestName;
+
+    @Column(nullable = false)
+    private Long unitId;
+
+    @Column(nullable = false)
+    private LocalDate checkIn;
+
+    @Column(nullable = false)
+    private LocalDate checkOut;
+
+    @Column(nullable = false)
+    private String status;
+
+    public Reservation() {
+
+    }
+
+    public Reservation(Long id, String guestName, Long unitId,
+                        LocalDate checkIn, LocalDate checkOut, String status) {
+        this.id = id;
+        this.guestName = guestName;
+        this.unitId = unitId;
+        this.checkIn = checkIn;
+        this.checkOut = checkOut;
+        this.status = status;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getGuestName() {
+        return guestName;
+    }
+
+    public void setGuestName(String guestName) {
+        this.guestName = guestName;
+    }
+
+    public Long getUnitId() {
+        return unitId;
+    }
+
+    public void setUnitId(Long unitId) {
+        this.unitId = unitId;
+    }
+
+    public LocalDate getCheckIn() {
+        return checkIn;
+    }
+
+    public void setCheckIn(LocalDate checkIn) {
+        this.checkIn = checkIn;
+    }
+
+    public LocalDate getCheckOut() {
+        return checkOut;
+    }
+
+    public void setCheckOut(LocalDate checkOut) {
+        this.checkOut = checkOut;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+}
