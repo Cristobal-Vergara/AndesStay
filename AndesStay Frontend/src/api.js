@@ -1,1 +1,2 @@
-export const API_BASE_URL = "http://localhost:8090";
+export const API_BASE_URL =
+    "https://yq309x2ila.execute-api.us-east-1.amazonaws.com";
