@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
 @RequestMapping("/api/reports")
@@ -31,5 +33,11 @@ public class ReportController {
         return ResponseEntity.ok(
                 "Acceso autorizado mediante JWT de Azure AD"
         );
+    }
+
+    @GetMapping("/operations")
+    public Map<String, Object> dailyOperations(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return reportService.getDailyOperations(date);
     }
 }

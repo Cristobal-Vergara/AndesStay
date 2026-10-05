@@ -1,66 +1,45 @@
 package com.example.AndesStay.controller;
 
+import com.example.AndesStay.dto.PageResponse;
 import com.example.AndesStay.entity.Unit;
 import com.example.AndesStay.service.UnitService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/catalog/units")
-@CrossOrigin(origins = "*")
 public class UnitController {
+    private final UnitService service;
 
-    private final UnitService unitService;
-
-    public UnitController(UnitService unitService) {
-        this.unitService = unitService;
+    public UnitController(UnitService service) {
+        this.service = service;
     }
 
     @GetMapping
-    public ResponseEntity<List<Unit>> getAllUnits() {
-
-        return ResponseEntity.ok(
-                unitService.getAllUnits()
-        );
+    public PageResponse<Unit> getAllUnits(@RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return PageResponse.from(service.getUnits(page, size));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Unit> getUnitById(
-            @PathVariable Long id) {
-
-        return ResponseEntity.ok(
-                unitService.getUnitById(id)
-        );
+    public Unit getUnitById(@PathVariable Long id) {
+        return service.getUnitById(id);
     }
 
     @PostMapping
-    public ResponseEntity<Unit> createUnit(
-            @RequestBody Unit unit) {
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(unitService.createUnit(unit));
+    public ResponseEntity<Unit> createUnit(@RequestBody Unit unit) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createUnit(unit));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Unit> updateUnit(
-            @PathVariable Long id,
-            @RequestBody Unit unit) {
-
-        return ResponseEntity.ok(
-                unitService.updateUnit(id, unit)
-        );
+    public Unit updateUnit(@PathVariable Long id, @RequestBody Unit unit) {
+        return service.updateUnit(id, unit);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUnit(
-            @PathVariable Long id) {
-
-        unitService.deleteUnit(id);
-
+    public ResponseEntity<Void> deleteUnit(@PathVariable Long id) {
+        service.deleteUnit(id);
         return ResponseEntity.noContent().build();
     }
 }

@@ -1,16 +1,17 @@
-# React + Vite
+# Frontend AndesStay
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Consulta el [README principal](../README.md) para levantar el entorno completo y la configuración de Microsoft Entra.
 
-Currently, two official plugins are available:
+Para desarrollo con Node 24 LTS:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```powershell
+..\scripts\setup-local.cmd
+npm ci
+npm run dev
+```
 
-## React Compiler
+Vite utiliza localhost:5173 y reenvía `/api` a un BFF iniciado fuera de Docker en localhost:8090. Usa este modo cuando desarrolles los servicios de forma nativa y el puerto 5173 esté libre. Para utilizar un BFF accesible en otra dirección, configura `VITE_PROXY_TARGET`. Si el frontend se conecta a un origen distinto sin proxy, configura `VITE_API_BASE_URL` y autoriza ese origen en CORS del BFF.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Con el Compose principal, Nginx realiza el proxy y no hace falta iniciar Vite.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+`npm test` verifica llamadas HTTP y flujos de páginas. `npm run lint` ejecuta ESLint y `npm run build` genera la versión de producción. `.env.local` contiene únicamente configuración pública de Entra y la zona horaria; está excluido de Git.

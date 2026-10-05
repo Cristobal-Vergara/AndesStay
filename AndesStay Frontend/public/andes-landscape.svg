@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 680" fill="none">
+<defs><linearGradient id="sky" x2="0" y2="680" gradientUnits="userSpaceOnUse"><stop stop-color="#e9ddc4"/><stop offset="1" stop-color="#f3e9d2"/></linearGradient><linearGradient id="front" x2="900" y2="680" gradientUnits="userSpaceOnUse"><stop stop-color="#315447"/><stop offset="1" stop-color="#193b32"/></linearGradient></defs>
+<path fill="url(#sky)" d="M0 0h900v680H0z"/><circle cx="646" cy="156" r="59" fill="#c17a55"/>
+<path d="M0 337 120 238l90 81L375 81l160 239 91-70 125 111 96-105 53 78v346H0Z" fill="#a5b2a1"/>
+<path d="m290 204 85-123 94 140-49-17-26 25-26-34-30 24Z" fill="#f6f0df"/>
+<path d="M0 360 143 294l130 109 193-93 155 84 157-96 122 94v288H0Z" fill="#738d79"/>
+<path d="M0 420c148-110 291-46 423 19s256 24 477-83v324H0Z" fill="#4f705d"/>
+<path d="M0 527c168-86 282-137 456-110 122 19 278 143 444 85v178H0Z" fill="url(#front)"/>
+<path d="M462 440c-25 36-12 71 57 88s79 57 43 78l-121 74h125c146-106 98-155-12-180-61-14-86-36-64-63Z" fill="#b2b49a"/>
+<path d="m588 405 86-75 94 75v99H588Z" fill="#b98059"/><path d="m572 410 102-94 109 94-10 13-99-88-91 87Z" fill="#e9dfc3"/><path d="M665 414h36v90h-36Z" fill="#2d493d"/><path d="M607 416h35v35h-35Zm113 0h27v35h-27Z" fill="#f2cc87"/><path d="M625 416v35m-18-18h35m91-17v35m-13-18h27" stroke="#8c5e40" stroke-width="3"/>
+<path d="M588 468h76m38 0h66m-180 14h76m38 0h66m-180 16h76m38 0h66" stroke="#9e6c4d" stroke-width="2"/>
+<path d="M726 339v-27h15v40" fill="#45604a"/>
+<g fill="#224438"><path d="m113 384-54 98h108Zm0 48-71 109h142Zm0 56-88 118h176Z"/><path d="m241 379-37 79h74Zm0 45-51 91h102Zm0 47-63 99h126Z"/><path d="m827 357-40 83h80Zm0 43-54 102h108Zm0 56-72 109h144Z"/></g>
+<g fill="#193c31"><path d="m367 488-50 99h100Zm0 50-66 111h132Z"/><path d="m67 514-59 118h118Zm0 48-77 118h154Z"/><path d="m783 491-52 102h104Zm0 48-73 128h146Z"/></g>
+<path d="M0 650c198-55 318 29 453 3s281-8 447-26v53H0Z" fill="#16362d"/>
+<g stroke="#ded7bb" stroke-linecap="round" opacity=".7"><path d="m510 201 12-3 12 3m-293-48 10-3 10 3m347-116 9-3 9 3"/></g></svg>

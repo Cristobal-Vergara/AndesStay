@@ -1,11 +1,15 @@
 package com.example.AndesStay.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "RESERVATIONS")
+@Table(name = "RESERVATIONS", indexes = {
+        @Index(name = "idx_reservation_unit_dates", columnList = "unit_id,status,check_in,check_out")
+})
 public class Reservation {
 
     @Id
@@ -26,6 +30,15 @@ public class Reservation {
 
     @Column(nullable = false)
     private String status;
+
+    // Las reservas anteriores pueden no tener propietario; solo las ve el personal.
+    @JsonIgnore
+    @Column(name = "owner_id", length = 73)
+    private String ownerId;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    @Column(nullable = false)
+    private boolean guestAssigned;
 
     public Reservation() {
 
@@ -79,6 +92,22 @@ public class Reservation {
 
     public void setCheckOut(LocalDate checkOut) {
         this.checkOut = checkOut;
+    }
+
+    public String getOwnerId() {
+        return ownerId;
+    }
+
+    public void setOwnerId(String ownerId) {
+        this.ownerId = ownerId;
+    }
+
+    public boolean isGuestAssigned() {
+        return guestAssigned;
+    }
+
+    public void setGuestAssigned(boolean guestAssigned) {
+        this.guestAssigned = guestAssigned;
     }
 
     public String getStatus() {

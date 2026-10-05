@@ -17,13 +17,13 @@ public class AuditEvent {
     @Column(nullable = false)
     private Long reservationId;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 1024)
     private String description;
 
     @Column(nullable = false)
     private LocalDateTime eventDate;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 512)
     private String user;
 
     public AuditEvent() {}

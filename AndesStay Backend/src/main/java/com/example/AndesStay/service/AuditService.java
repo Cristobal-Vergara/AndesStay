@@ -6,8 +6,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 import java.util.List;
 
 @Service
@@ -15,15 +21,18 @@ public class AuditService {
 
     private final AuditEventRepository auditEventRepository;
     private final KafkaProducer kafkaProducer;
+    private final Clock clock;
 
     public AuditService(
             AuditEventRepository auditEventRepository,
-            KafkaProducer kafkaProducer) {
+            KafkaProducer kafkaProducer, Clock clock) {
 
         this.auditEventRepository = auditEventRepository;
         this.kafkaProducer = kafkaProducer;
+        this.clock = clock;
     }
 
+    @Transactional
     public AuditEvent registerEvent(
             String action,
             Long reservationId,
@@ -34,7 +43,7 @@ public class AuditService {
         event.setAction(action);
         event.setReservationId(reservationId);
         event.setDescription(description);
-        event.setEventDate(LocalDateTime.now());
+        event.setEventDate(LocalDateTime.now(clock));
 
         // Obtener usuario desde el JWT de Azure AD
         event.setUser(obtenerUsuarioActual());
@@ -99,85 +108,37 @@ public class AuditService {
     }
 
     public List<AuditEvent> getAllEvents() {
-
-        return auditEventRepository.findAll();
+        return getFilteredEvents(null, null, null, null);
     }
 
+    @Transactional(readOnly = true)
     public List<AuditEvent> getFilteredEvents(
             String user,
             String action,
             LocalDateTime inicio,
             LocalDateTime fin) {
 
-        if (user != null
-                && !user.isBlank()
-                && action != null
-                && !action.isBlank()
-                && inicio != null
-                && fin != null) {
-
-            return auditEventRepository
-                    .findByUserAndActionAndEventDateBetween(
-                            user,
-                            action,
-                            inicio,
-                            fin
-                    );
+        if (inicio != null && fin != null && inicio.isAfter(fin)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La fecha de inicio no puede ser posterior a la fecha de fin");
         }
 
-        if (user != null && !user.isBlank()
-                && action != null && !action.isBlank()) {
+        return auditEventRepository.findFilteredEvents(
+                normalize(user), normalize(action), inicio, fin);
+    }
 
-            return auditEventRepository
-                    .findByUserAndAction(
-                            user,
-                            action
-                    );
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AuditEvent> getFilteredEventsPage(String user, String action,
+            LocalDateTime inicio, LocalDateTime fin, int page, int size) {
+        if (inicio != null && fin != null && inicio.isAfter(fin)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La fecha de inicio no puede ser posterior a la fecha de fin");
         }
-
-        if (user != null && !user.isBlank()
-                && inicio != null && fin != null) {
-
-            return auditEventRepository
-                    .findByUserAndEventDateBetween(
-                            user,
-                            inicio,
-                            fin
-                    );
-        }
-
-        if (user != null && !user.isBlank()) {
-
-            return auditEventRepository
-                    .findByUser(user);
-        }
-
-        if (action != null && !action.isBlank()
-                && inicio != null && fin != null) {
-
-            return auditEventRepository
-                    .findByActionAndEventDateBetween(
-                            action,
-                            inicio,
-                            fin
-                    );
-        }
-
-        if (action != null && !action.isBlank()) {
-
-            return auditEventRepository
-                    .findByAction(action);
-        }
-
-        if (inicio != null && fin != null) {
-
-            return auditEventRepository
-                    .findByEventDateBetween(
-                            inicio,
-                            fin
-                    );
-        }
-
-        return auditEventRepository.findAll();
+        return auditEventRepository.findFilteredEventsPage(normalize(user), normalize(action), inicio, fin,
+                Pagination.request(page, size, Sort.unsorted()));
     }
 }

@@ -1,91 +1,56 @@
 package com.example.AndesStay.controller;
 
+import com.example.AndesStay.dto.PageResponse;
 import com.example.AndesStay.entity.Reservation;
 import com.example.AndesStay.service.ReservationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/reservations")
 public class ReservationController {
+    private final ReservationService service;
 
-    private final ReservationService reservationService;
-
-    public ReservationController(ReservationService reservationService) {
-        this.reservationService = reservationService;
-    }
-
-    @PostMapping
-    public ResponseEntity<Reservation> createReservation(
-            @RequestBody Reservation reservation) {
-
-    Reservation created = reservationService.createReservation(reservation);
-
-    if (created == null) {
-        return ResponseEntity.badRequest().build();
-    }
-
-    return ResponseEntity.ok(created);
+    public ReservationController(ReservationService service) {
+        this.service = service;
     }
 
     @GetMapping
-    public ResponseEntity<List<Reservation>> getAllReservations() {
-
-        return ResponseEntity.ok(
-                reservationService.getAllReservations()
-        );
+    public PageResponse<Reservation> getReservations(
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+        return PageResponse.from(service.getReservations(page, size));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Reservation> getReservationById(
-            @PathVariable Long id) {
+    public ResponseEntity<Reservation> getReservationById(@PathVariable Long id) {
+        return service.getReservationById(id).map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
 
-        return reservationService.getReservationById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    @PostMapping
+    public Reservation createReservation(@RequestBody Reservation reservation) {
+        return service.createReservation(reservation);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Reservation> updateReservation(
-            @PathVariable Long id,
-            @RequestBody Reservation reservation) {
+    public Reservation updateReservation(@PathVariable Long id, @RequestBody Reservation reservation) {
+        return service.updateReservation(id, reservation);
+    }
 
-        Reservation updated =
-                reservationService.updateReservation(id, reservation);
+    @PutMapping("/{id}/status")
+    public Reservation updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return service.updateStatus(id, body.get("status"));
+    }
 
-        if (updated == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        return ResponseEntity.ok(updated);
+    @PutMapping("/{id}/owner")
+    public Reservation assignOwner(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return service.assignOwner(id, body.get("objectId"));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteReservation(
-            @PathVariable Long id) {
-
-        boolean deleted = reservationService.deleteReservation(id);
-
-        if (!deleted) {
-            return ResponseEntity.notFound().build();
-        }
-
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<Void> deleteReservation(@PathVariable Long id) {
+        return service.deleteReservation(id) ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
     }
-    @PutMapping("/{id}/status")
-public ResponseEntity<Reservation> updateStatus(
-        @PathVariable Long id,
-        @RequestBody Reservation reservation) {
-
-    Reservation updated =
-            reservationService.updateStatus(id, reservation.getStatus());
-
-    if (updated == null) {
-        return ResponseEntity.badRequest().build();
-    }
-
-    return ResponseEntity.ok(updated);
-}
 }

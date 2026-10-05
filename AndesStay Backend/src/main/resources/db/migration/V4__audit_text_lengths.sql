@@ -1,0 +1,2 @@
+ALTER TABLE audit_events MODIFY description VARCHAR(1024) NOT NULL;
+ALTER TABLE audit_events MODIFY user VARCHAR(512) NOT NULL;

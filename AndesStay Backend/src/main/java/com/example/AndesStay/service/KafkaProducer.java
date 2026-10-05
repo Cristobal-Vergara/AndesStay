@@ -1,26 +1,13 @@
 package com.example.AndesStay.service;
 
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 public class KafkaProducer {
-
-    private static final String TOPIC = "andesstay.events";
-
-    private final KafkaTemplate<String, String> kafkaTemplate;
-
-    public KafkaProducer(KafkaTemplate<String, String> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
-    }
+    private final OutboxService outbox;
+    public KafkaProducer(OutboxService outbox) { this.outbox = outbox; }
 
     public void sendReservationEvent(String message) {
-
-        kafkaTemplate.send(TOPIC, message);
-
-        System.out.println("=================================");
-        System.out.println("EVENTO ENVIADO A KAFKA");
-        System.out.println(message);
-        System.out.println("=================================");
+        outbox.enqueue("KAFKA", message.startsWith("AUDITORIA:") ? "AUDIT_EVENT" : "RESERVATION_CREATED", message);
     }
 }

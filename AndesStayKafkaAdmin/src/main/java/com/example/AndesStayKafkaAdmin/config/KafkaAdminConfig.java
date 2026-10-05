@@ -1,26 +1,17 @@
 package com.example.AndesStayKafkaAdmin.config;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import java.util.Map;
 
 @Configuration
 public class KafkaAdminConfig {
-
-    @Bean
-    public AdminClient adminClient() {
-
-        Map<String, Object> properties = new HashMap<>();
-
-        properties.put(
-                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-                "localhost:9092"
-        );
-
-        return AdminClient.create(properties);
+    @Bean(destroyMethod = "close")
+    public AdminClient adminClient(@Value("${spring.kafka.bootstrap-servers}") String servers) {
+        return AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, servers,
+                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 5000, AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10000));
     }
 }

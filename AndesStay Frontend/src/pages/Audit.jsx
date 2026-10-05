@@ -1,282 +1,68 @@
-import React, { useEffect, useState } from "react";
-import { useMsal } from "@azure/msal-react";
-import { loginRequest } from "../authConfig";
-import { API_BASE_URL } from "../api";
+import PageHeader from "../components/PageHeader";
+import EmptyState from "../components/EmptyState";
+import Icon from "../components/Icon";
+import { useCallback, useState } from "react";
+import Navbar from "../components/Navbar";
+import Pagination from "../components/Pagination";
+import { useApi } from "../hooks/useApi";
+import { useResource } from "../hooks/useResource";
+import { queryPath, requirePage } from "../api";
+import { localDateTime, TIME_ZONE } from "../format";
 
-function Audit() {
-
-    const { instance, accounts } = useMsal();
-
-    const [eventos, setEventos] = useState([]);
-    const [action, setAction] = useState("");
-    const [inicio, setInicio] = useState("");
-    const [fin, setFin] = useState("");
+const blank = { user: "", action: "", inicio: "", fin: "" };
+const actions = {
+    RESERVA_CREADA: "Reserva creada", RESERVA_CONFIRMADA: "Reserva confirmada",
+    RESERVA_CANCELADA: "Reserva cancelada", RESERVA_ACTUALIZADA: "Reserva actualizada",
+    RESERVA_ELIMINADA: "Reserva eliminada", PROPIETARIO_ASIGNADO: "Cuenta de huésped asignada",
+    CHECKIN_PENDIENTE: "Check-in pendiente", CHECKIN: "Check-in", CHECKOUT: "Check-out",
+};
+export default function Audit() {
+    const { request, account } = useApi();
+    const [fields, setFields] = useState(blank);
+    const [applied, setApplied] = useState(blank);
+    const [page, setPage] = useState(0);
     const [error, setError] = useState("");
-
-    const obtenerToken = async () => {
-
-        const tokenResponse =
-            await instance.acquireTokenSilent({
-                ...loginRequest,
-                account: accounts[0]
-            });
-
-        return tokenResponse.accessToken;
-    };
-
-    const cargarEventos = async () => {
-
-        try {
-
-            setError("");
-
-            const token = await obtenerToken();
-
-            const params = new URLSearchParams();
-
-            if (action) {
-                params.append("action", action);
-            }
-
-            if (inicio) {
-                params.append("inicio", inicio);
-            }
-
-            if (fin) {
-                params.append("fin", fin);
-            }
-
-            const url =
-                `${API_BASE_URL}/api/bff/audit`
-                + (params.toString()
-                    ? `?${params.toString()}`
-                    : "");
-
-            const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(
-                    `Error al obtener auditoría: ${response.status}`
-                );
-            }
-
-            const data = await response.json();
-
-            setEventos(data);
-
-        } catch (err) {
-
-            console.error(err);
-            setError("No se pudieron cargar los eventos de auditoría.");
+    const load = useCallback(signal => request(queryPath("/api/bff/audit", { ...applied, page, size: 20 }), { signal }).then(requirePage),
+        [request, applied, page]);
+    const events = useResource(load, !!account);
+    const change = event => setFields(current => ({ ...current, [event.target.name]: event.target.value }));
+    const filter = event => {
+        event.preventDefault();
+        if (fields.inicio && fields.fin && fields.inicio > fields.fin) {
+            setError("La fecha de inicio no puede ser posterior a la fecha de fin."); return;
         }
+        setError(""); setPage(0); setApplied({ ...fields });
     };
-
-    useEffect(() => {
-
-        if (accounts.length > 0) {
-            cargarEventos();
-        }
-
-    }, [accounts]);
-
-    const limpiarFiltros = () => {
-
-        setAction("");
-        setInicio("");
-        setFin("");
-
-        setTimeout(() => {
-            cargarEventos();
-        }, 0);
-    };
-
-    return (
-        <div style={{ padding: "20px" }}>
-
-            <h1>Auditoría</h1>
-
-            <p>
-                Registro de eventos y trazabilidad de las reservas.
-            </p>
-
-            <hr />
-
-            <h2>Filtros</h2>
-
-            <div
-                style={{
-                    display: "flex",
-                    gap: "15px",
-                    flexWrap: "wrap",
-                    alignItems: "end",
-                    marginBottom: "25px"
-                }}
-            >
-
-                <div>
-                    <label>
-                        <strong>Tipo de evento</strong>
-                    </label>
-
-                    <br />
-
-                    <select
-                        value={action}
-                        onChange={(e) =>
-                            setAction(e.target.value)
-                        }
-                    >
-                        <option value="">
-                            Todos
-                        </option>
-
-                        <option value="RESERVA_CREADA">
-                            Reserva creada
-                        </option>
-
-                        <option value="RESERVA_CONFIRMADA">
-                            Reserva confirmada
-                        </option>
-
-                        <option value="RESERVA_CANCELADA">
-                            Reserva cancelada
-                        </option>
-
-                        <option value="CHECKIN_PENDIENTE">
-                            Check-in pendiente
-                        </option>
-
-                        <option value="CHECKIN">
-                            Check-in
-                        </option>
-
-                        <option value="CHECKOUT">
-                            Check-out
-                        </option>
-                    </select>
-                </div>
-
-                <div>
-                    <label>
-                        <strong>Desde</strong>
-                    </label>
-
-                    <br />
-
-                    <input
-                        type="datetime-local"
-                        value={inicio}
-                        onChange={(e) =>
-                            setInicio(e.target.value)
-                        }
-                    />
-                </div>
-
-                <div>
-                    <label>
-                        <strong>Hasta</strong>
-                    </label>
-
-                    <br />
-
-                    <input
-                        type="datetime-local"
-                        value={fin}
-                        onChange={(e) =>
-                            setFin(e.target.value)
-                        }
-                    />
-                </div>
-
-                <button onClick={cargarEventos}>
-                    Filtrar
-                </button>
-
-                <button onClick={limpiarFiltros}>
-                    Limpiar filtros
-                </button>
-
-            </div>
-
-            {error && (
-                <p>{error}</p>
-            )}
-
-            <h2>
-                Eventos encontrados: {eventos.length}
-            </h2>
-
-            <table
-                border="1"
-                cellPadding="10"
-                style={{
-                    borderCollapse: "collapse",
-                    width: "100%"
-                }}
-            >
-
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Acción</th>
-                        <th>Reserva</th>
-                        <th>Usuario</th>
-                        <th>Descripción</th>
-                        <th>Fecha</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-
-                    {eventos.length === 0 ? (
-
-                        <tr>
-                            <td
-                                colSpan="6"
-                                style={{
-                                    textAlign: "center"
-                                }}
-                            >
-                                No se encontraron eventos.
-                            </td>
-                        </tr>
-
-                    ) : (
-
-                        eventos.map((evento) => (
-
-                            <tr key={evento.id}>
-
-                                <td>{evento.id}</td>
-
-                                <td>{evento.action}</td>
-
-                                <td>{evento.reservationId}</td>
-
-                                <td>{evento.user}</td>
-
-                                <td>{evento.description}</td>
-
-                                <td>{evento.eventDate}</td>
-
-                            </tr>
-
-                        ))
-
-                    )}
-
-                </tbody>
-
-            </table>
-
-        </div>
-    );
+    const clear = () => { setFields(blank); setApplied({ ...blank }); setPage(0); setError(""); };
+    return <><Navbar /><main className="app-main" id="main-content">
+        <PageHeader eyebrow="HISTORIAL & TRAZABILIDAD" title="Auditoría" description="Cada movimiento de las reservas, en un solo lugar.">
+            <span className="subtle-tag"><Icon name="clock" size={13} />{TIME_ZONE}</span>
+        </PageHeader>
+        <form onSubmit={filter}><div className="panel-heading"><span className="panel-icon"><Icon name="filter" size={18} /></span><h2>Encuentra un evento</h2></div><div className="form-grid">
+            <label>Usuario<input name="user" value={fields.user} onChange={change} placeholder="Usuario exacto" /></label>
+            <label>Tipo de evento<select name="action" value={fields.action} onChange={change}>
+                <option value="">Todos</option>
+                {Object.entries(actions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select></label>
+            <label>Desde<input name="inicio" type="datetime-local" step="1" value={fields.inicio} onChange={change} /></label>
+            <label>Hasta<input name="fin" type="datetime-local" step="1" value={fields.fin} onChange={change} /></label>
+        </div><div className="actions">
+            <button type="submit" disabled={events.loading}><Icon name="filter" size={16} />Filtrar</button>
+            <button type="button" onClick={clear} disabled={events.loading}>Limpiar filtros</button>
+        </div></form>
+        {error || events.error ? <p role="alert">{error || events.error}</p> : null}
+        {events.loading && <p role="status" className="loading-state">Cargando eventos…</p>}
+        <div className="section-heading"><h2>Actividad de las reservas</h2><span className="subtle-tag">{events.data?.totalElements ?? 0} eventos encontrados</span></div>
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Historial de auditoría"><table><thead><tr>
+            <th>Evento</th><th>Acción</th><th>Reserva</th><th>Usuario</th><th>Descripción</th><th>Fecha y hora</th>
+        </tr></thead><tbody>
+            {events.data?.content.map(event => <tr key={event.id}>
+                <td className="table-id">#{event.id}</td><td><strong>{actions[event.action] || event.action}</strong></td><td className="table-id">#{event.reservationId}</td>
+                <td className="table-user">{event.user}</td><td>{event.description}</td><td className="table-date">{localDateTime(event.eventDate)}</td>
+            </tr>)}
+            {events.data?.content.length === 0 && <tr><td colSpan={6}><EmptyState title="No se encontraron eventos" description="Prueba con otros filtros o revisa el historial completo." icon="shield" /></td></tr>}
+        </tbody></table></div>
+        <Pagination data={events.data} page={page} onChange={setPage} loading={events.loading} label="eventos" />
+        <footer className="page-footer">AndesStay <span>Los detalles también cuentan una historia.</span></footer>
+    </main></>;
 }
-
-export default Audit;
-
-

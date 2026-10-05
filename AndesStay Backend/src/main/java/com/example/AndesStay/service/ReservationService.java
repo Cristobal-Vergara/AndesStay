@@ -4,294 +4,250 @@ import com.example.AndesStay.entity.Reservation;
 import com.example.AndesStay.entity.Unit;
 import com.example.AndesStay.repository.ReservationRepository;
 import com.example.AndesStay.repository.UnitRepository;
-
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Stream;
 
 @Service
 public class ReservationService {
+
+    private static final List<String> BLOCKING_STATUSES =
+            List.of("CONFIRMADA", "CHECKIN_PENDIENTE", "EN_ESTADÍA");
+
+    private static final Map<String, Set<String>> TRANSITIONS = Map.of(
+            "CREADA", Set.of("CONFIRMADA", "CANCELADA"),
+            "CONFIRMADA", Set.of("CHECKIN_PENDIENTE", "CANCELADA"),
+            "CHECKIN_PENDIENTE", Set.of("EN_ESTADÍA"),
+            "EN_ESTADÍA", Set.of("CHECKOUT")
+    );
 
     private final ReservationRepository reservationRepository;
     private final UnitRepository unitRepository;
     private final ReservationProducer reservationProducer;
     private final KafkaProducer kafkaProducer;
     private final AuditService auditService;
+    private final ReservationAccess reservationAccess;
 
     public ReservationService(
-            ReservationRepository reservationRepository,
-            UnitRepository unitRepository,
-            ReservationProducer reservationProducer,
-            KafkaProducer kafkaProducer,
-            AuditService auditService) {
-
+            ReservationRepository reservationRepository, UnitRepository unitRepository,
+            ReservationProducer reservationProducer, KafkaProducer kafkaProducer,
+            AuditService auditService, ReservationAccess reservationAccess) {
         this.reservationRepository = reservationRepository;
         this.unitRepository = unitRepository;
         this.reservationProducer = reservationProducer;
         this.kafkaProducer = kafkaProducer;
         this.auditService = auditService;
+        this.reservationAccess = reservationAccess;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Reservation createReservation(Reservation reservation) {
+        String ownerId = reservationAccess.currentOwnerId();
+        validateDetails(reservation);
+        Unit unit = lockUnit(reservation.getUnitId());
+        requireAvailable(unit);
+        requireNoOverlap(reservation, null);
 
-        // Validar nombre del huésped
-        if (reservation.getGuestName() == null
-                || reservation.getGuestName().isBlank()) {
-            return null;
-        }
+        // El servidor decide identidad y estado, incluso si el cliente envía otros.
+        reservation.setId(null);
+        reservation.setStatus("CREADA");
+        reservation.setOwnerId(ownerId);
+        reservation.setGuestAssigned(!reservationAccess.isStaff());
+        reservation.setGuestName(reservation.getGuestName().trim());
 
-        // Validar unitId
-        if (reservation.getUnitId() == null) {
-            return null;
-        }
-
-        // Validar que la unidad exista
-        Optional<Unit> unit =
-                unitRepository.findById(reservation.getUnitId());
-
-        if (unit.isEmpty()) {
-            return null;
-        }
-
-        // Validar fecha de entrada
-        if (reservation.getCheckIn() == null) {
-            return null;
-        }
-
-        // Validar fecha de salida
-        if (reservation.getCheckOut() == null) {
-            return null;
-        }
-
-        // La fecha de salida debe ser posterior a la fecha de entrada
-        if (!reservation.getCheckOut().isAfter(reservation.getCheckIn())) {
-            return null;
-        }
-
-        // Estado inicial
-        if (reservation.getStatus() == null
-                || reservation.getStatus().isBlank()) {
-            reservation.setStatus("CREADA");
-        }
-
-        // Guardar reserva
-        Reservation savedReservation =
-                reservationRepository.save(reservation);
-
-        // RabbitMQ
-        reservationProducer.sendReservationCreated(savedReservation);
-
-        // Kafka
-        String kafkaMessage =
-                "Reserva creada: "
-                + "ID=" + savedReservation.getId()
-                + ", Huésped=" + savedReservation.getGuestName()
-                + ", Unidad=" + savedReservation.getUnitId()
-                + ", CheckIn=" + savedReservation.getCheckIn()
-                + ", CheckOut=" + savedReservation.getCheckOut()
-                + ", Estado=" + savedReservation.getStatus();
-
-        kafkaProducer.sendReservationEvent(kafkaMessage);
-
-        // Auditoría
-        auditService.registerEvent(
-                "RESERVA_CREADA",
-                savedReservation.getId(),
-                "Se creó la reserva para el huésped "
-                        + savedReservation.getGuestName()
-        );
-
-        return savedReservation;
+        Reservation saved = reservationRepository.save(reservation);
+        reservationProducer.sendReservationCreated(saved);
+        kafkaProducer.sendReservationEvent(
+                "Reserva creada: ID=" + saved.getId()
+                        + ", Huésped=" + saved.getGuestName() + ", Unidad=" + saved.getUnitId()
+                        + ", CheckIn=" + saved.getCheckIn() + ", CheckOut=" + saved.getCheckOut()
+                        + ", Estado=" + saved.getStatus());
+        auditService.registerEvent("RESERVA_CREADA", saved.getId(),
+                "Se creó la reserva para el huésped " + saved.getGuestName());
+        return saved;
     }
 
-    public List<Reservation> getAllReservations() {
-        return reservationRepository.findAll();
+    public List<Reservation> getReservations() {
+        if (reservationAccess.isStaff()) {
+            return reservationRepository.findAll();
+        }
+        return reservationRepository.findByOwnerId(reservationAccess.currentOwnerId());
     }
 
     public Optional<Reservation> getReservationById(Long id) {
-        return reservationRepository.findById(id);
+        if (reservationAccess.isStaff()) {
+            return reservationRepository.findById(id);
+        }
+        // Una reserva ajena y una inexistente producen la misma respuesta: 404.
+        return reservationRepository.findByIdAndOwnerId(id, reservationAccess.currentOwnerId());
     }
 
-    public Reservation updateReservation(
-            Long id,
-            Reservation reservation) {
+    @Transactional(readOnly = true)
+    public Page<Reservation> getReservations(int page, int size) {
+        var request = Pagination.request(page, size, Sort.by(Sort.Direction.DESC, "id"));
+        return reservationAccess.isStaff() ? reservationRepository.findAll(request)
+                : reservationRepository.findByOwnerId(reservationAccess.currentOwnerId(), request);
+    }
 
-        Optional<Reservation> existingReservation =
-                reservationRepository.findById(id);
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public Reservation assignOwner(Long id, String objectId) {
+        reservationAccess.requireStaff();
+        if (objectId == null || !objectId.trim().matches("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El identificador de cuenta del huésped debe ser un OID válido de Microsoft");
+        }
+        String tenant = reservationAccess.currentOwnerId().split(":", 2)[0];
+        Reservation reservation = lockReservation(id);
+        reservation.setOwnerId(tenant + ":" + UUID.fromString(objectId.trim()));
+        reservation.setGuestAssigned(true);
+        Reservation saved = reservationRepository.save(reservation);
+        auditService.registerEvent("PROPIETARIO_ASIGNADO", saved.getId(),
+                "Recepción asignó explícitamente la reserva a la cuenta del huésped");
+        return saved;
+    }
 
-        if (existingReservation.isEmpty()) {
-            return null;
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public Reservation updateReservation(Long id, Reservation incoming) {
+        reservationAccess.requireStaff();
+        Reservation current = lockReservation(id);
+        validateDetails(incoming);
+
+        // Orden estable al cambiar de unidad para evitar bloqueos en orden inverso.
+        Unit targetUnit = lockUnits(current.getUnitId(), incoming.getUnitId());
+        requireAvailable(targetUnit);
+        if ("CREADA".equals(current.getStatus()) || BLOCKING_STATUSES.contains(current.getStatus())) {
+            requireNoOverlap(incoming, current.getId());
         }
 
-        Reservation current = existingReservation.get();
-
-        current.setGuestName(reservation.getGuestName());
-        current.setUnitId(reservation.getUnitId());
-        current.setCheckIn(reservation.getCheckIn());
-        current.setCheckOut(reservation.getCheckOut());
-
-        return reservationRepository.save(current);
+        // No modificar la entidad administrada hasta terminar todas las validaciones.
+        current.setGuestName(incoming.getGuestName().trim());
+        current.setUnitId(incoming.getUnitId());
+        current.setCheckIn(incoming.getCheckIn());
+        current.setCheckOut(incoming.getCheckOut());
+        Reservation saved = reservationRepository.save(current);
+        auditService.registerEvent("RESERVA_ACTUALIZADA", saved.getId(),
+                "Se actualizaron los datos y fechas de la reserva");
+        return saved;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public boolean deleteReservation(Long id) {
-
-        if (!reservationRepository.existsById(id)) {
+        reservationAccess.requireStaff();
+        Optional<Reservation> existing = reservationRepository.findByIdForUpdate(id);
+        if (existing.isEmpty()) {
             return false;
         }
-
-        reservationRepository.deleteById(id);
-
+        // Una reserva huérfana anterior también puede eliminarse para reparar sus datos.
+        unitRepository.findByIdForUpdate(existing.get().getUnitId());
+        reservationRepository.delete(existing.get());
+        auditService.registerEvent("RESERVA_ELIMINADA", id, "Se eliminó la reserva");
         return true;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Reservation updateStatus(Long id, String newStatus) {
-
-        Optional<Reservation> existingReservation =
-                reservationRepository.findById(id);
-
-        if (existingReservation.isEmpty()) {
-            return null;
+        reservationAccess.requireStaff();
+        if (newStatus == null || newStatus.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El estado es obligatorio");
         }
-
-        Reservation reservation = existingReservation.get();
-
+        Reservation reservation = lockReservation(id);
         String currentStatus = reservation.getStatus();
+        if (currentStatus == null
+                || !TRANSITIONS.getOrDefault(currentStatus, Set.of()).contains(newStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La transición de estado solicitada no está permitida");
+        }
 
-        // CREADA → CONFIRMADA
-        if (currentStatus.equals("CREADA")
-                && newStatus.equals("CONFIRMADA")) {
-
-            Optional<Unit> unit =
-                    unitRepository.findById(reservation.getUnitId());
-
-            if (unit.isEmpty()) {
-                return null;
+        Unit unit = lockUnit(reservation.getUnitId());
+        if (BLOCKING_STATUSES.contains(newStatus)) {
+            validateDetails(reservation);
+            if ("CONFIRMADA".equals(newStatus)) {
+                requireAvailable(unit);
             }
+            requireNoOverlap(reservation, reservation.getId());
+        }
 
-            // Buscar reservas confirmadas de la misma unidad
-            List<Reservation> confirmedReservations =
-                    reservationRepository.findByUnitIdAndStatus(
-                            reservation.getUnitId(),
-                            "CONFIRMADA"
-                    );
+        reservation.setStatus(newStatus);
+        Reservation saved = reservationRepository.save(reservation);
+        String action = switch (newStatus) {
+            case "CONFIRMADA" -> "RESERVA_CONFIRMADA";
+            case "CANCELADA" -> "RESERVA_CANCELADA";
+            case "CHECKIN_PENDIENTE" -> "CHECKIN_PENDIENTE";
+            case "EN_ESTADÍA" -> "CHECKIN";
+            case "CHECKOUT" -> "CHECKOUT";
+            default -> throw new IllegalStateException("Transición sin evento de auditoría");
+        };
+        reservationProducer.sendReservationStatusChanged(saved);
+        auditService.registerEvent(action, saved.getId(),
+                "La reserva cambió de " + currentStatus + " a " + newStatus);
+        return saved;
+    }
 
-            // Comprobar si las fechas se cruzan
-            for (Reservation existing : confirmedReservations) {
+    private void validateDetails(Reservation reservation) {
+        if (reservation == null || reservation.getGuestName() == null
+                || reservation.getGuestName().isBlank()
+                || reservation.getGuestName().trim().length() > 255) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El nombre del huésped es obligatorio y admite hasta 255 caracteres");
+        }
+        if (reservation.getUnitId() == null || reservation.getUnitId() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El identificador de unidad debe ser positivo");
+        }
+        if (reservation.getCheckIn() == null || reservation.getCheckOut() == null
+                || !reservation.getCheckOut().isAfter(reservation.getCheckIn())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La fecha de salida debe ser posterior a la fecha de entrada");
+        }
+    }
 
-                boolean datesOverlap =
-                        reservation.getCheckIn().isBefore(existing.getCheckOut())
-                        && reservation.getCheckOut().isAfter(existing.getCheckIn());
+    private Reservation lockReservation(Long id) {
+        return reservationRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Reserva no encontrada"));
+    }
 
-                if (datesOverlap) {
-                    return null;
-                }
+    private Unit lockUnit(Long id) {
+        return unitRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Unidad no encontrada"));
+    }
+
+    private Unit lockUnits(Long currentUnitId, Long targetUnitId) {
+        Unit target = null;
+        for (Long unitId : Stream.of(currentUnitId, targetUnitId).distinct().sorted().toList()) {
+            Unit unit = lockUnit(unitId);
+            if (unitId.equals(targetUnitId)) {
+                target = unit;
             }
-
-            reservation.setStatus(newStatus);
-
-            Reservation savedReservation =
-                    reservationRepository.save(reservation);
-
-            // Auditoría
-            auditService.registerEvent(
-                    "RESERVA_CONFIRMADA",
-                    savedReservation.getId(),
-                    "La reserva cambió de CREADA a CONFIRMADA"
-            );
-
-            return savedReservation;
         }
+        return target;
+    }
 
-        // CREADA → CANCELADA
-        if (currentStatus.equals("CREADA")
-                && newStatus.equals("CANCELADA")) {
-
-            reservation.setStatus(newStatus);
-
-            Reservation savedReservation =
-                    reservationRepository.save(reservation);
-
-            // Auditoría
-            auditService.registerEvent(
-                    "RESERVA_CANCELADA",
-                    savedReservation.getId(),
-                    "La reserva cambió de CREADA a CANCELADA"
-            );
-
-            return savedReservation;
+    private void requireAvailable(Unit unit) {
+        if (!Boolean.TRUE.equals(unit.getAvailable())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La unidad está deshabilitada para nuevas reservas");
         }
+    }
 
-        // CONFIRMADA → CHECKIN_PENDIENTE
-        // CONFIRMADA → CANCELADA
-        if (currentStatus.equals("CONFIRMADA")
-                && (newStatus.equals("CHECKIN_PENDIENTE")
-                || newStatus.equals("CANCELADA"))) {
-
-            reservation.setStatus(newStatus);
-
-            Reservation savedReservation =
-                    reservationRepository.save(reservation);
-
-            String action;
-
-            if (newStatus.equals("CHECKIN_PENDIENTE")) {
-                action = "CHECKIN_PENDIENTE";
-            } else {
-                action = "RESERVA_CANCELADA";
-            }
-
-            auditService.registerEvent(
-                    action,
-                    savedReservation.getId(),
-                    "La reserva cambió de "
-                            + currentStatus
-                            + " a "
-                            + newStatus
-            );
-
-            return savedReservation;
+    private void requireNoOverlap(Reservation reservation, Long excludedId) {
+        if (reservationRepository.existsOverlappingReservation(reservation.getUnitId(),
+                BLOCKING_STATUSES, reservation.getCheckIn(), reservation.getCheckOut(), excludedId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La unidad ya tiene una reserva que ocupa esas fechas");
         }
-
-        // CHECKIN_PENDIENTE → EN_ESTADÍA
-        if (currentStatus.equals("CHECKIN_PENDIENTE")
-                && newStatus.equals("EN_ESTADÍA")) {
-
-            reservation.setStatus(newStatus);
-
-            Reservation savedReservation =
-                    reservationRepository.save(reservation);
-
-            // Auditoría
-            auditService.registerEvent(
-                    "CHECKIN",
-                    savedReservation.getId(),
-                    "La reserva pasó de CHECKIN_PENDIENTE a EN_ESTADÍA"
-            );
-
-            return savedReservation;
-        }
-
-        // EN_ESTADÍA → CHECKOUT
-        if (currentStatus.equals("EN_ESTADÍA")
-                && newStatus.equals("CHECKOUT")) {
-
-            reservation.setStatus(newStatus);
-
-            Reservation savedReservation =
-                    reservationRepository.save(reservation);
-
-            // Auditoría
-            auditService.registerEvent(
-                    "CHECKOUT",
-                    savedReservation.getId(),
-                    "La reserva pasó de EN_ESTADÍA a CHECKOUT"
-            );
-
-            return savedReservation;
-        }
-
-        return null;
     }
 }
 
