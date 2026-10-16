@@ -9,7 +9,7 @@ export default function AccountProvider({ children }) {
     const authenticated = useIsAuthenticated();
     const { request, account } = useApi();
     const [receipt, setReceipt] = useState(null);
-    const load = useCallback(signal => request("/api/bff/account/profile", { signal }), [request]);
+    const load = useCallback(signal => request("/api/v1/bff/account/profile", { signal }), [request]);
     const resource = useResource(load, authenticated && !!account);
     const saved = receipt && receipt.account === account ? receipt.profile : null;
     const profile = saved || resource.data;

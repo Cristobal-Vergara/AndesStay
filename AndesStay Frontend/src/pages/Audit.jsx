@@ -22,7 +22,7 @@ export default function Audit() {
     const [applied, setApplied] = useState(blank);
     const [page, setPage] = useState(0);
     const [error, setError] = useState("");
-    const load = useCallback(signal => request(queryPath("/api/bff/audit", { ...applied, page, size: 20 }), { signal }).then(requirePage),
+    const load = useCallback(signal => request(queryPath("/api/v1/bff/audit", { ...applied, page, size: 20 }), { signal }).then(requirePage),
         [request, applied, page]);
     const events = useResource(load, !!account);
     const change = event => setFields(current => ({ ...current, [event.target.name]: event.target.value }));

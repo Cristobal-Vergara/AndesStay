@@ -43,21 +43,21 @@ class AuditSecurityTests {
     @CsvSource({"Admin,200", "Auditor,200", "Recepcionista,403", "Huesped,403", "SinRol,403"})
     void onlyAdminAndAuditorCanReadEvents(String role, int code) throws Exception {
         authenticate(role);
-        mvc.perform(get("/api/audit").header("Authorization", "Bearer test-token"))
+        mvc.perform(get("/api/v1/audit").header("Authorization", "Bearer test-token"))
                 .andExpect(status().is(code));
         if (code == 403) verifyNoInteractions(repository, kafka);
     }
 
     @Test
     void anonymousRequestRequiresAuthentication() throws Exception {
-        mvc.perform(get("/api/audit")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/audit")).andExpect(status().isUnauthorized());
         verifyNoInteractions(repository, kafka);
     }
 
     @Test
     void httpFiltersReachTheRepositoryTogether() throws Exception {
         authenticate("Auditor");
-        mvc.perform(get("/api/audit").header("Authorization", "Bearer test-token")
+        mvc.perform(get("/api/v1/audit").header("Authorization", "Bearer test-token")
                 .param("user", " alice ").param("action", "RESERVA_CREADA")
                 .param("inicio", "2026-10-02T10:00").param("fin", "2026-10-03T10:00"))
                 .andExpect(status().isOk());
@@ -70,7 +70,7 @@ class AuditSecurityTests {
     @CsvSource({"inicio,fecha-inválida", "fin,2026-02-30T10:00", "inicio,2026-10-02"})
     void malformedDatesReturnBadRequestWithAnExplanation(String field, String value) throws Exception {
         authenticate("Admin");
-        mvc.perform(get("/api/audit").header("Authorization", "Bearer test-token").param(field, value))
+        mvc.perform(get("/api/v1/audit").header("Authorization", "Bearer test-token").param(field, value))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail", containsString("El filtro " + field)));
         verifyNoInteractions(repository, kafka);
@@ -79,7 +79,7 @@ class AuditSecurityTests {
     @Test
     void reversedRangeReturnsBadRequestWithoutQuerying() throws Exception {
         authenticate("Admin");
-        mvc.perform(get("/api/audit").header("Authorization", "Bearer test-token")
+        mvc.perform(get("/api/v1/audit").header("Authorization", "Bearer test-token")
                 .param("inicio", "2026-10-03T10:00").param("fin", "2026-10-02T10:00"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("La fecha de inicio no puede ser posterior a la fecha de fin"));

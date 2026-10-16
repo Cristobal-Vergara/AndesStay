@@ -66,7 +66,7 @@ class ReservationSecurityTests {
 
     @Test
     void anonymousRequestRequiresAuthentication() throws Exception {
-        mvc.perform(get("/api/bff/reservations")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/bff/reservations")).andExpect(status().isUnauthorized());
         verifyNoInteractions(service);
     }
 
@@ -75,7 +75,7 @@ class ReservationSecurityTests {
         when(decoder.decode("test-token")).thenReturn(Jwt.withTokenValue("test-token")
                 .header("alg", "RS256").subject("test-user").claim("roles", List.of("Admin")).build());
 
-        mvc.perform(patch("/api/bff/reservations/1").header("Authorization", "Bearer test-token")
+        mvc.perform(patch("/api/v1/bff/reservations/1").header("Authorization", "Bearer test-token")
                 .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(service);
@@ -124,10 +124,10 @@ class ReservationSecurityTests {
 
     private MockHttpServletRequestBuilder request(String operation) {
         return switch (operation) {
-            case "list" -> get("/api/bff/reservations");
-            case "create" -> post("/api/bff/reservations")
+            case "list" -> get("/api/v1/bff/reservations");
+            case "create" -> post("/api/v1/bff/reservations")
                     .contentType(MediaType.APPLICATION_JSON).content("{}");
-            case "status" -> put("/api/bff/reservations/1/status")
+            case "status" -> put("/api/v1/bff/reservations/1/status")
                     .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"CONFIRMADA\"}");
             default -> throw new IllegalArgumentException(operation);
         };

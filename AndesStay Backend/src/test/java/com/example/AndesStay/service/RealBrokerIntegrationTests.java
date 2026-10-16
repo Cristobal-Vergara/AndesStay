@@ -1,5 +1,12 @@
 package com.example.AndesStay.service;
 
+import com.example.AndesStay.messaging.demo.DeliveryDemoConsumer;
+import com.example.AndesStay.messaging.notifications.ReceptionNotificationConsumer;
+import com.rabbitmq.client.Channel;
+import org.springframework.amqp.core.AcknowledgeMode;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.listener.AbstractMessageListenerContainer;
 import com.example.AndesStay.repository.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
@@ -76,7 +83,11 @@ class RealBrokerIntegrationTests {
     @Autowired OutboxDispatchService dispatch;
     @Autowired InboxService inbox;
     @MockitoSpyBean ReservationNotificationService notices;
-    @MockitoSpyBean MessagingDemoService demo;
+    @Autowired MessagingDemoService demo;
+    @MockitoSpyBean DeliveryDemoConsumer demoConsumer;
+    @MockitoSpyBean ReceptionNotificationConsumer receptionConsumer;
+    @Autowired ReservationNotificationRepository noticeRepository;
+    @Autowired ConnectionFactory connections;
     @Autowired MessagingStatusService messagingStatus;
     @Autowired JdbcTemplate jdbc;
     @Autowired AmqpAdmin amqp;
@@ -119,6 +130,13 @@ class RealBrokerIntegrationTests {
 
     @Test void reservationRoutingReachesIndependentRealConsumersAndKeepsGuestPrivacy() throws Exception {
         assertTrue(System.getenv("TEST_FRESH_DB_URL").contains("/andesstay_test_"));
+        listeners.getListenerContainers().forEach(container ->
+            assertEquals(AcknowledgeMode.MANUAL, ((AbstractMessageListenerContainer) container).getAcknowledgeMode()));
+        await(() -> amqp.getQueueInfo(PREFIX + ".reception").getConsumerCount() == 1
+            && amqp.getQueueInfo(PREFIX + ".guest").getConsumerCount() == 1
+            && amqp.getQueueInfo(PREFIX + ".demo").getConsumerCount() == 1, Duration.ofSeconds(10));
+        assertEquals(0, amqp.getQueueInfo(PREFIX + ".dlq").getConsumerCount());
+        assertEquals(0, amqp.getQueueInfo(PREFIX + ".demo.dlq").getConsumerCount());
         var unit=units.saveAndFlush(new com.example.AndesStay.entity.Unit(null,"Broker prueba","HABITACION",2,BigDecimal.TEN,true,"Prueba"));
         authenticate("Huesped", WorkflowIntegrationTests.GUEST);
         var reservation=service.createReservation(new com.example.AndesStay.entity.Reservation(null,"Prueba",unit.getId(),
@@ -159,6 +177,7 @@ class RealBrokerIntegrationTests {
         assertTrue(unknown.getFuture().get(10, java.util.concurrent.TimeUnit.SECONDS).ack());
         assertNotNull(unknown.getReturned(),"Mandatory debe devolver los mensajes sin un binding");
         verifyRetriesAndQuarantine();
+        verifyBrokerRedeliveryAfterCommitAndLostAck();
         verifyDemoAndRetention();
         verifyExpiryAndOverflow();
 
@@ -169,7 +188,7 @@ class RealBrokerIntegrationTests {
         String poison=payload(poisonId,0);
         rabbit.convertAndSend(PREFIX+".direct","reservation.created",poison);
         await(() -> amqp.getQueueInfo(PREFIX+".dlq").getMessageCount()==1,Duration.ofSeconds(15));
-        verify(notices,times(3)).receive(poison,false);
+        verify(notices,times(1)).receive(poison,false);
         assertEquals(0,received("RABBITMQ",poisonId),"Cada fallo debe revertir su entrada en inbox");
         Message dead=rabbit.receive(PREFIX+".dlq");
         assertNotNull(dead);
@@ -181,7 +200,7 @@ class RealBrokerIntegrationTests {
         String retryId=UUID.randomUUID().toString(), transientPayload=payload(retryId,789);
         var attempts=new AtomicInteger();
         doAnswer(invocation -> {
-            if(attempts.incrementAndGet()<3) throw new IllegalStateException("Fallo transitorio controlado");
+            if(attempts.incrementAndGet()<3) throw new org.springframework.dao.TransientDataAccessResourceException("Fallo transitorio controlado");
             return invocation.callRealMethod();
         }).when(notices).receive(transientPayload,false);
         rabbit.convertAndSend(PREFIX+".direct","reservation.created",transientPayload);
@@ -189,19 +208,97 @@ class RealBrokerIntegrationTests {
         assertEquals(3,attempts.get());
         assertEquals(0,amqp.getQueueInfo(PREFIX+".dlq").getMessageCount());
         assertFalse(inbox.process("RABBITMQ",transientPayload,()->fail("El reintento no duplica el aviso")));
+
+        String exhaustedId=UUID.randomUUID().toString(), exhausted=payload(exhaustedId,790);
+        doThrow(new org.springframework.dao.DataAccessResourceFailureException("Conexión temporal no recuperada"))
+            .when(notices).receive(exhausted,false);
+        rabbit.convertAndSend(PREFIX+".direct","reservation.created",exhausted);
+        await(() -> amqp.getQueueInfo(PREFIX+".dlq").getMessageCount()==1,Duration.ofSeconds(15));
+        verify(notices,times(3)).receive(exhausted,false);
+        assertEquals(0,received("RABBITMQ",exhaustedId));
+        assertRejectedFrom(".reception",exhausted);
+
+        String guestId=UUID.randomUUID().toString();
+        String invalidGuest="{\"id\":\""+guestId+"\",\"type\":\"RESERVATION_CONFIRMED\","
+            + "\"data\":{\"reservationId\":791,\"unitId\":1,\"guestAssigned\":true,\"ownerId\":\"invalid\"}}";
+        rabbit.convertAndSend("",PREFIX+".guest",invalidGuest);
+        await(() -> amqp.getQueueInfo(PREFIX+".dlq").getMessageCount()==1,Duration.ofSeconds(15));
+        verify(notices,times(1)).receive(invalidGuest,true);
+        assertEquals(0,received("RABBITMQ_GUEST",guestId));
+        assertRejectedFrom(".guest",invalidGuest);
+    }
+
+    private void assertRejectedFrom(String suffix,String payload) {
+        Message dead=rabbit.receive(PREFIX+".dlq");
+        assertNotNull(dead);
+        assertEquals(payload,new String(dead.getBody(),java.nio.charset.StandardCharsets.UTF_8));
+        var death=dead.getMessageProperties().getXDeathHeader().get(0);
+        assertEquals("rejected",death.get("reason").toString());
+        assertEquals(PREFIX+suffix,death.get("queue").toString());
+    }
+
+    private void verifyBrokerRedeliveryAfterCommitAndLostAck() throws Exception {
+        var receptionListener=listeners.getListenerContainer("receptionNotifications");
+        assertNotNull(receptionListener);
+        receptionListener.stop();
+        await(() -> amqp.getQueueInfo(PREFIX+".reception").getConsumerCount()==0,Duration.ofSeconds(10));
+        String id=UUID.randomUUID().toString(), payload=payload(id,792);
+        long before=noticeRepository.count();
+        rabbit.convertAndSend(PREFIX+".direct","reservation.created",payload);
+        await(() -> amqp.getQueueInfo(PREFIX+".reception").getMessageCount()==1,Duration.ofSeconds(10));
+        Channel brokerChannel=connections.createConnection().createChannel(false);
+        try {
+            var response=brokerChannel.basicGet(PREFIX+".reception",false);
+            assertNotNull(response);
+            var properties=new MessageProperties();
+            properties.setDeliveryTag(response.getEnvelope().getDeliveryTag());
+            properties.setConsumerQueue(PREFIX+".reception");
+            var delivery=new Message(response.getBody(),properties);
+            Channel interruptedChannel=mock(Channel.class);
+            doAnswer(invocation -> {
+                assertEquals(1,received("RABBITMQ",id),"El commit debe terminar antes del ACK");
+                assertEquals(before+1,noticeRepository.count());
+                brokerChannel.abort();
+                throw new java.io.IOException("Pérdida de canal antes del ACK");
+            }).when(interruptedChannel).basicAck(properties.getDeliveryTag(),false);
+            assertThrows(java.io.IOException.class,() -> receptionConsumer.receive(delivery,interruptedChannel));
+            verify(interruptedChannel).abort();
+            verify(interruptedChannel,never()).basicNack(anyLong(),anyBoolean(),anyBoolean());
+        } finally {
+            if(brokerChannel.isOpen()) brokerChannel.abort();
+            receptionListener.start();
+        }
+        verify(receptionConsumer,timeout(10000)).receive(argThat(message ->
+            payload.equals(new String(message.getBody(),java.nio.charset.StandardCharsets.UTF_8))
+                && Boolean.TRUE.equals(message.getMessageProperties().isRedelivered())),any(Channel.class));
+        await(() -> {
+            var queue=management.get().uri(URI.create(policyUri(".reception").toString().replace("/policies/","/queues/")))
+                .retrieve().body(Map.class);
+            return queue!=null && ((Number)queue.get("messages")).longValue()==0
+                && ((Number)queue.get("consumers")).longValue()==1;
+        },Duration.ofSeconds(15));
+        verify(receptionConsumer,times(2)).receive(argThat(message ->
+            payload.equals(new String(message.getBody(),java.nio.charset.StandardCharsets.UTF_8))),any(Channel.class));
+        verify(notices,times(1)).receive(payload,false);
+        assertEquals(before+1,noticeRepository.count(),"La reentrega real no debe repetir el aviso");
+        assertEquals(1,received("RABBITMQ",id));
+        assertEquals(0,amqp.getQueueInfo(PREFIX+".dlq").getMessageCount());
     }
     private void verifyDemoAndRetention() throws Exception {
         String id=demo.publish();
         await(() -> messagingStatus.status().demoQuarantined()==1,Duration.ofSeconds(15));
-        verify(demo,times(3)).receive(any(Message.class));
+        verify(demoConsumer,times(1)).receive(any(Message.class), any(com.rabbitmq.client.Channel.class));
+        verify(demoConsumer,times(3)).simulateFailure();
         assertEquals(0L,messagingStatus.status().quarantined());
         assertEquals(0,received("RABBITMQ",id),"La demo no escribe eventos de reserva");
         await(() -> messagingStatus.status().demoQuarantined()==0,Duration.ofSeconds(10));
     }
     private void verifyExpiryAndOverflow() throws Exception {
         listeners.stop();
+        await(() -> amqp.getQueueInfo(PREFIX+".reception").getConsumerCount()==0,Duration.ofSeconds(10));
         policy(".source-policy","^"+java.util.regex.Pattern.quote(PREFIX)+"\\.(reception|guest)$",
             Map.of("dead-letter-exchange",PREFIX+".dlx","message-ttl",200,"max-length",10));
+        awaitQueuePolicy(".reception",Map.of("message-ttl",200,"max-length",10,"dead-letter-exchange",PREFIX+".dlx"));
         rabbit.convertAndSend("",PREFIX+".reception",payload(UUID.randomUUID().toString(),111));
         await(() -> amqp.getQueueInfo(PREFIX+".dlq").getMessageCount()==1,Duration.ofSeconds(10));
         Message expired=rabbit.receive(PREFIX+".dlq");
@@ -209,12 +306,7 @@ class RealBrokerIntegrationTests {
         assertEquals("expired",expired.getMessageProperties().getXDeathHeader().get(0).get("reason").toString());
         policy(".source-policy","^"+java.util.regex.Pattern.quote(PREFIX)+"\\.(reception|guest)$",
             Map.of("dead-letter-exchange",PREFIX+".dlx","message-ttl",60000,"max-length",1));
-        // Dejar que el broker aplique el cambio de política antes de publicar.
-        await(() -> {
-            var definition=management.get().uri(URI.create(policyUri(".source-policy").toString().replace("/policies/", "/queues/").replace(PREFIX+".source-policy", PREFIX+".reception")))
-                .retrieve().body(Map.class);
-            return definition!=null && ((Map<?,?>)definition.get("effective_policy_definition")).get("max-length").equals(1);
-        },Duration.ofSeconds(5));
+        awaitQueuePolicy(".reception",Map.of("message-ttl",60000,"max-length",1,"dead-letter-exchange",PREFIX+".dlx"));
         rabbit.convertAndSend("",PREFIX+".reception",payload(UUID.randomUUID().toString(),112));
         rabbit.convertAndSend("",PREFIX+".reception",payload(UUID.randomUUID().toString(),113));
         await(() -> amqp.getQueueInfo(PREFIX+".dlq").getMessageCount()==1,Duration.ofSeconds(10));
@@ -222,9 +314,24 @@ class RealBrokerIntegrationTests {
         assertNotNull(overflow);
         assertEquals("maxlen",overflow.getMessageProperties().getXDeathHeader().get(0).get("reason").toString());
         policy(".dead-policy","^"+java.util.regex.Pattern.quote(PREFIX)+"\\.dlq$",Map.of("message-ttl",200));
+        awaitQueuePolicy(".dlq",Map.of("message-ttl",200));
         rabbit.convertAndSend("",PREFIX+".dlq","retention-check");
         await(() -> amqp.getQueueInfo(PREFIX+".dlq").getMessageCount()==1,Duration.ofSeconds(5));
         await(() -> amqp.getQueueInfo(PREFIX+".dlq").getMessageCount()==0,Duration.ofSeconds(10));
+    }
+    private void awaitQueuePolicy(String suffix,Map<String,Object> expected) throws Exception {
+        URI queueUri=URI.create(policyUri(suffix).toString().replace("/policies/", "/queues/"));
+        // La API de gestion puede tardar en reflejar la politica; comprobar sus valores antes de publicar.
+        await(() -> {
+            var queue=management.get().uri(queueUri).retrieve().body(Map.class);
+            if(queue==null || !(queue.get("effective_policy_definition") instanceof Map<?,?> effective)) return false;
+            return expected.entrySet().stream().allMatch(entry -> {
+                Object actual=effective.get(entry.getKey());
+                if(entry.getValue() instanceof Number wanted && actual instanceof Number found)
+                    return wanted.longValue()==found.longValue();
+                return java.util.Objects.equals(entry.getValue(),actual);
+            });
+        },Duration.ofSeconds(15));
     }
     private String payload(String id,long reservationId) {
         return "{\"id\":\""+id+"\",\"type\":\"RESERVATION_CREATED\",\"data\":{\"reservationId\":"+reservationId+",\"unitId\":1}}";

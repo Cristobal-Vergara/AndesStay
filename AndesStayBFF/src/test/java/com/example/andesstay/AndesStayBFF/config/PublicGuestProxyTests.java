@@ -34,31 +34,31 @@ class PublicGuestProxyTests {
     }
     @Test void sameTokenGetsGuestAccessImmediatelyAfterRegistration() throws Exception {
         profile("{\"registered\":false,\"roles\":[]}");
-        fixture.server().expect(requestTo("http://backend.test/api/account/register"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/account/register"))
             .andExpect(header("Authorization","Bearer public"))
             .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
                 .body("{\"registered\":true,\"roles\":[\"Huesped\"]}"));
         profile("{\"registered\":true,\"roles\":[\"Huesped\"]}");
-        fixture.server().expect(requestTo("http://backend.test/api/reservations"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/reservations"))
             .andExpect(method(HttpMethod.GET)).andExpect(header("Authorization","Bearer public"))
             .andRespond(withSuccess("[]",MediaType.APPLICATION_JSON));
-        mvc.perform(post("/api/bff/account/register").header("Authorization","Bearer public")
+        mvc.perform(post("/api/v1/bff/account/register").header("Authorization","Bearer public")
             .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Ana Torres\"}"))
             .andExpect(status().isCreated()).andExpect(jsonPath("$.roles[0]").value("Huesped"));
-        mvc.perform(get("/api/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isOk());
         fixture.server().verify();
     }
     @Test void registeredCustomerCanCreateButCannotManageReservationsOrReadReports() throws Exception {
         profile("{\"registered\":true,\"roles\":[\"Huesped\"]}");
-        fixture.server().expect(requestTo("http://backend.test/api/reservations"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/reservations"))
             .andExpect(method(HttpMethod.POST)).andExpect(header("Authorization","Bearer public"))
             .andRespond(withSuccess("{}",MediaType.APPLICATION_JSON));
-        var managementPaths=List.of("/api/bff/reservations/1/status","/api/bff/catalog/1");
-        var staffPaths=List.of("/api/bff/reports","/api/bff/audit");
+        var managementPaths=List.of("/api/v1/bff/reservations/1/status","/api/v1/bff/catalog/1");
+        var staffPaths=List.of("/api/v1/bff/reports","/api/v1/bff/audit");
         for(String ignored:managementPaths) profile("{\"registered\":true,\"roles\":[\"Huesped\"]}");
         for(String ignored:staffPaths) profile("{\"registered\":true,\"roles\":[\"Huesped\",\"Admin\"]}");
 
-        mvc.perform(post("/api/bff/reservations").header("Authorization","Bearer public")
+        mvc.perform(post("/api/v1/bff/reservations").header("Authorization","Bearer public")
             .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk());
         for(String path:managementPaths) {
             mvc.perform(put(path).header("Authorization","Bearer public").contentType(MediaType.APPLICATION_JSON).content("{}"))
@@ -76,26 +76,26 @@ class PublicGuestProxyTests {
         "{\"registered\":true,\"roles\":\"Huesped\"}", "{}","invalid-json"})
     void absentOrMalformedProfileNeverGrantsAccess(String body) throws Exception {
         profile(body);
-        mvc.perform(get("/api/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
         fixture.server().verify();
     }
     @Test void backendFailureNeverGrantsGuestAccess() throws Exception {
-        fixture.server().expect(requestTo("http://backend.test/api/account/profile")).andRespond(withServerError().body("Internal data"));
-        mvc.perform(get("/api/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
+        fixture.server().expect(requestTo("http://backend.test/api/v1/account/profile")).andRespond(withServerError().body("Internal data"));
+        mvc.perform(get("/api/v1/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
         fixture.server().verify();
     }
     @Test void applicationTokenWithoutDelegatedScopeIsNotTreatedAsCustomer() throws Exception {
         authenticate(false,null);
-        mvc.perform(get("/api/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
         fixture.server().verify();
     }
     @Test void auditorKeepsOnlyItsAssignedPermissionsWithoutProfileLookup() throws Exception {
         authenticate(true,"Auditor");
-        mvc.perform(get("/api/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/bff/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
         fixture.server().verify();
     }
     private void profile(String body) {
-        fixture.server().expect(requestTo("http://backend.test/api/account/profile"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/account/profile"))
             .andExpect(method(HttpMethod.GET)).andExpect(header("Authorization","Bearer public"))
             .andRespond(withSuccess(body,MediaType.APPLICATION_JSON));
     }

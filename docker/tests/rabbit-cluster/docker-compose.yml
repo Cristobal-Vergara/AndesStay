@@ -1,0 +1,50 @@
+# Solo se inicia desde test-rabbit-cluster con credenciales y proyecto propios.
+x-rabbit: &rabbit
+  image: rabbitmq@sha256:fa4df769f34a62672437ec24b7cc697d1a518dbed410a71a0ff2a53b527a6ed0
+  environment:
+    RABBITMQ_DEFAULT_USER: ${CLUSTER_USERNAME:?Ejecuta scripts/test-rabbit-cluster.cmd}
+    RABBITMQ_DEFAULT_PASS: ${CLUSTER_PASSWORD:?Ejecuta scripts/test-rabbit-cluster.cmd}
+    RABBITMQ_ERLANG_COOKIE: ${CLUSTER_COOKIE:?Ejecuta scripts/test-rabbit-cluster.cmd}
+    RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "+S 2:2 +SDcpu 1 +SDio 1"
+  ports:
+    - "127.0.0.1::5672"
+    - "127.0.0.1::15672"
+  mem_limit: 512m
+  cpus: 1
+  security_opt:
+    - no-new-privileges:true
+  healthcheck:
+    test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+    interval: 5s
+    timeout: 5s
+    retries: 24
+    start_period: 10s
+services:
+  rabbit1:
+    <<: *rabbit
+    hostname: rabbit1
+    volumes:
+      - rabbit1_data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+  rabbit2:
+    <<: *rabbit
+    hostname: rabbit2
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+    volumes:
+      - rabbit2_data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+  rabbit3:
+    <<: *rabbit
+    hostname: rabbit3
+    depends_on:
+      rabbit2:
+        condition: service_healthy
+    volumes:
+      - rabbit3_data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+volumes:
+  rabbit1_data:
+  rabbit2_data:
+  rabbit3_data:

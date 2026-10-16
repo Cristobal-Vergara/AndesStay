@@ -10,7 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/messaging")
+@RequestMapping({"/api/v1/messaging", "/api/messaging"})
 public class MessagingController {
     private final MessagingStatusService status;
     private final ObjectProvider<MessagingDemoService> demo;

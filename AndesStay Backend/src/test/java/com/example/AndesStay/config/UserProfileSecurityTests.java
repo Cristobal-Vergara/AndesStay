@@ -35,21 +35,21 @@ class UserProfileSecurityTests {
         authenticate();
     }
     @Test void anonymousCannotReadOrCreateProfiles() throws Exception {
-        mvc.perform(get("/api/account/profile")).andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/account/register").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(get("/api/v1/account/profile")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/account/register").contentType(MediaType.APPLICATION_JSON)
             .content("{\"displayName\":\"Ana\"}")).andExpect(status().isUnauthorized());
         verifyNoInteractions(profiles);
     }
     @Test void invalidTokenCannotRegister() throws Exception {
         when(decoder.decode("test")).thenThrow(new BadJwtException("invalid"));
-        mvc.perform(post("/api/account/register").header("Authorization","Bearer test")
+        mvc.perform(post("/api/v1/account/register").header("Authorization","Bearer test")
             .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Ana\"}"))
             .andExpect(status().isUnauthorized());
         verifyNoInteractions(profiles);
     }
     @Test void identityWithoutRolesRegistersOnlyAsGuestAndCannotManageUnits() throws Exception {
-        mvc.perform(get("/api/reservations").header("Authorization","Bearer test")).andExpect(status().isForbidden());
-        mvc.perform(post("/api/account/register").header("Authorization","Bearer test")
+        mvc.perform(get("/api/v1/reservations").header("Authorization","Bearer test")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/account/register").header("Authorization","Bearer test")
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"displayName\":\"  Ana Torres  \",\"email\":\"forged@test\",\"ownerKey\":\"other\",\"roles\":[\"Admin\"]}"))
             .andExpect(status().isCreated()).andExpect(jsonPath("$.registered").value(true))
@@ -59,11 +59,11 @@ class UserProfileSecurityTests {
             .andExpect(jsonPath("$.roles.length()").value(1));
         verify(profiles).saveAndFlush(argThat(p -> p.getOwnerKey().equals("tenant:object")
             && p.getEmail().equals("verified@example.test")));
-        mvc.perform(post("/api/catalog/units").header("Authorization","Bearer test")
+        mvc.perform(post("/api/v1/catalog/units").header("Authorization","Bearer test")
             .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
     }
     @Test void getUsesCurrentIdentityAndIgnoresOtherAccountParameters() throws Exception {
-        mvc.perform(get("/api/account/profile").header("Authorization","Bearer test").param("ownerKey","victim"))
+        mvc.perform(get("/api/v1/account/profile").header("Authorization","Bearer test").param("ownerKey","victim"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.registered").value(false))
             .andExpect(jsonPath("$.email").value("verified@example.test"));
         verify(profiles).findByOwnerKey("tenant:object");
@@ -71,28 +71,28 @@ class UserProfileSecurityTests {
     }
     @Test void verifiedTokenWithoutStableMicrosoftIdentityIsRejected() throws Exception {
         when(decoder.decode("test")).thenReturn(Jwt.withTokenValue("test").header("alg","RS256").subject("object").build());
-        mvc.perform(get("/api/account/profile").header("Authorization","Bearer test")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/account/profile").header("Authorization","Bearer test")).andExpect(status().isForbidden());
         verifyNoInteractions(profiles);
     }
     @Test void applicationTokenWithoutDelegatedScopeCannotReadOrCreateProfile() throws Exception {
         when(decoder.decode("test")).thenReturn(Jwt.withTokenValue("test").header("alg","RS256").subject("object")
             .claim("tid","tenant").claim("oid","object").build());
-        mvc.perform(get("/api/account/profile").header("Authorization","Bearer test")).andExpect(status().isForbidden());
-        mvc.perform(post("/api/account/register").header("Authorization","Bearer test")
+        mvc.perform(get("/api/v1/account/profile").header("Authorization","Bearer test")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/account/register").header("Authorization","Bearer test")
             .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Ana\"}"))
             .andExpect(status().isForbidden());
         verifyNoInteractions(profiles);
     }
     @Test void malformedAndMissingNamesReturnBadRequestWithoutWriting() throws Exception {
         for(String body : new String[]{"{", "{}", "{\"displayName\":\" \"}"}) {
-            mvc.perform(post("/api/account/register").header("Authorization","Bearer test")
+            mvc.perform(post("/api/v1/account/register").header("Authorization","Bearer test")
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
         }
         verify(profiles,never()).saveAndFlush(any());
     }
     @Test void concurrentDuplicateConflictDoesNotExposeSql() throws Exception {
         when(profiles.saveAndFlush(any())).thenThrow(new org.springframework.dao.DataIntegrityViolationException("SQL secret"));
-        mvc.perform(post("/api/account/register").header("Authorization","Bearer test")
+        mvc.perform(post("/api/v1/account/register").header("Authorization","Bearer test")
             .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Ana\"}"))
             .andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(
                 "No se pudo crear el perfil. Actualiza la página para comprobar si ya está registrado."));

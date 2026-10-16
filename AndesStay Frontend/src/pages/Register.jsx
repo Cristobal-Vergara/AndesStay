@@ -18,7 +18,7 @@ export default function Register() {
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
     const [savedProfile, setSavedProfile] = useState(null);
-    const load = useCallback(signal => request("/api/bff/account/profile", { signal }), [request]);
+    const load = useCallback(signal => request("/api/v1/bff/account/profile", { signal }), [request]);
     const fallback = useResource(load, !session && authenticated && !!account);
     const resource = session ? { data: session.profile, loading: session.loading, error: session.error, refresh: session.refreshProfile } : fallback;
     const profile = savedProfile || resource.data;
@@ -45,7 +45,7 @@ export default function Register() {
         }
         setError(""); setBusy(true);
         try {
-            const result = await request("/api/bff/account/register", { method: "POST", body: { displayName: name } });
+            const result = await request("/api/v1/bff/account/register", { method: "POST", body: { displayName: name } });
             setSavedProfile(result); session?.completeProfile(result);
         }
         catch (failure) {

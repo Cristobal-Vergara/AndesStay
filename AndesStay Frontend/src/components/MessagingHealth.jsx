@@ -18,7 +18,7 @@ export default function MessagingHealth({ canDemo = false }) {
         const current = new AbortController();
         controller.current = current;
         try {
-            const result = await request("/api/bff/messaging/status", { signal: current.signal });
+            const result = await request("/api/v1/bff/messaging/status", { signal: current.signal });
             if (active.current && !current.signal.aborted) { setStatus(result); setError(""); }
         } catch (cause) {
             if (active.current && !current.signal.aborted && cause.name !== "AbortError") { setError(cause.message); setStatus(null); }
@@ -36,7 +36,7 @@ export default function MessagingHealth({ canDemo = false }) {
     const demo = async () => {
         setSending(true); setFeedback("");
         try {
-            await request("/api/bff/messaging/demo", { method: "POST" });
+            await request("/api/v1/bff/messaging/demo", { method: "POST" });
             if (active.current) setFeedback("Prueba enviada. La alerta aparecerá después de los tres intentos; se limpia automáticamente al minuto.");
             await reload();
         } catch (cause) {

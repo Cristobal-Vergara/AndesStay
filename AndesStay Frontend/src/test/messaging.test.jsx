@@ -50,7 +50,7 @@ it("la prueba de administrador publica sin datos de reservas y muestra su cuaren
     fireEvent.click(screen.getByRole("button", { name: "Probar alerta" }));
     await waitFor(() => expect(fetch.mock.calls.some(([,options]) => options.method === "POST")).toBe(true));
     const publish = fetch.mock.calls.find(([,options]) => options.method === "POST");
-    expect(publish[0]).toBe("/api/bff/messaging/demo");
+    expect(publish[0]).toBe("/api/v1/bff/messaging/demo");
     expect(publish[1].body).toBeUndefined();
     await screen.findByText(/Prueba enviada/);
     state = { ...healthy, demoQuarantined: 1 };

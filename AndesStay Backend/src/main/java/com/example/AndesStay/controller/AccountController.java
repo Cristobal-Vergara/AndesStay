@@ -16,7 +16,7 @@ public class AccountController {
         this.clock = clock;
     }
 
-    @GetMapping("/api/account")
+    @GetMapping({"/api/v1/account", "/api/account"})
     public Map<String, String> account() {
         String[] identity = access.currentOwnerId().split(":", 2);
         return Map.of("tenantId", identity[0], "objectId", identity[1],

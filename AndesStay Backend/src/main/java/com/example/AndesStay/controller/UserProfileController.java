@@ -7,7 +7,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/account")
+@RequestMapping({"/api/v1/account", "/api/account"})
 public class UserProfileController {
     public record Registration(String displayName) {}
     private final UserProfileService service;

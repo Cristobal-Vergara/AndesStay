@@ -42,7 +42,7 @@ Si el broker confirma y el proceso cae antes de guardar la marca de publicación
 
 Esta protección cubre las acciones de base de datos dentro de esa transacción. Una futura acción externa, como enviar un correo o cobrar, también necesita una clave de idempotencia propia; no debe asumirse que la transacción JDBC coordina ese servicio.
 
-El consumidor Kafka reintenta errores sin descartar automáticamente el registro. El consumidor RabbitMQ realiza tres intentos totales ante errores de procesamiento y, si se agotan, rechaza sin reencolar para enviar la entrega a cuarentena. Consulta las políticas y alertas del [paso 11](11-rabbitmq-dlq-retencion.md). Los mensajes antiguos sin ID se identifican mediante una huella de su contenido; dos mensajes antiguos con contenido idéntico se consideran la misma entrega.
+El consumidor Kafka reintenta errores sin descartar automáticamente el registro. Desde el [paso 14](14-ack-manual-y-clasificacion-de-errores.md), RabbitMQ utiliza ACK manual después del commit: los errores permanentes se rechazan inmediatamente y los temporales o no clasificados tienen hasta tres intentos antes del rechazo sin reencolado hacia cuarentena. Consulta las políticas y alertas del [paso 11](11-rabbitmq-dlq-retencion.md). Los mensajes antiguos sin ID se identifican mediante una huella de su contenido; dos mensajes antiguos con contenido idéntico se consideran la misma entrega.
 
 Los logs de consumidores evitan imprimir el contenido y los datos del huésped. El grupo Kafka puede configurarse mediante `spring.kafka.consumer.group-id`.
 

@@ -36,10 +36,10 @@ class CatalogSecurityTests {
     void catalogRoles(String role,String method,int expected) throws Exception {
         authenticate(role);
         var request=switch(method) {
-            case "GET"->get("/api/catalog/units");
-            case "POST"->post("/api/catalog/units");
-            case "PUT"->put("/api/catalog/units/1");
-            default->delete("/api/catalog/units/1");
+            case "GET"->get("/api/v1/catalog/units");
+            case "POST"->post("/api/v1/catalog/units");
+            case "PUT"->put("/api/v1/catalog/units/1");
+            default->delete("/api/v1/catalog/units/1");
         };
         mvc.perform(request.header("Authorization","Bearer test").contentType(MediaType.APPLICATION_JSON)
             .content("{\"name\":\"Unidad\",\"capacity\":2}")).andExpect(status().is(expected));
@@ -47,13 +47,13 @@ class CatalogSecurityTests {
     }
     @Test void fractionalCapacityIsRejectedInsteadOfTruncated() throws Exception {
         authenticate("Admin");
-        mvc.perform(post("/api/catalog/units").header("Authorization","Bearer test").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/catalog/units").header("Authorization","Bearer test").contentType(MediaType.APPLICATION_JSON)
             .content("{\"capacity\":2.5}")).andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
     @Test void listReturnsPaginationMetadata() throws Exception {
         authenticate("Huesped");
-        mvc.perform(get("/api/catalog/units").header("Authorization","Bearer test").param("page","2").param("size","10"))
+        mvc.perform(get("/api/v1/catalog/units").header("Authorization","Bearer test").param("page","2").param("size","10"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.content").isArray()).andExpect(jsonPath("$.totalElements").value(0));
         verify(service).getUnits(2,10);
     }

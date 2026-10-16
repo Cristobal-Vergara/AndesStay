@@ -48,27 +48,27 @@ class AuditProxyTests {
     @CsvSource({"Admin,200", "Auditor,200", "Recepcionista,403", "Huesped,403", "SinRol,403"})
     void onlyAdminAndAuditorCanReadEvents(String role, int code) throws Exception {
         authenticate(role);
-        if (code == 200) expectSuccess("http://backend.test/api/audit");
+        if (code == 200) expectSuccess("http://backend.test/api/v1/audit");
 
-        mvc.perform(get("/api/bff/audit").header("Authorization", "Bearer test-token"))
+        mvc.perform(get("/api/v1/bff/audit").header("Authorization", "Bearer test-token"))
                 .andExpect(status().is(code));
         fixture.server().verify();
     }
 
     @Test
     void anonymousRequestRequiresAuthenticationWithoutCallingBackend() throws Exception {
-        mvc.perform(get("/api/bff/audit")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/bff/audit")).andExpect(status().isUnauthorized());
         fixture.server().verify();
     }
 
     @Test
     void filtersAndBearerTokenReachBackendWithValuesEncoded() throws Exception {
         authenticate("Auditor");
-        expectSuccess("http://backend.test/api/audit"
+        expectSuccess("http://backend.test/api/v1/audit"
                 + "?user=ana%2Bventas%40ejemplo.cl%20%26%20equipo"
                 + "&action=RESERVA_CONFIRMADA&inicio=2026-10-02T10%3A00&fin=2026-10-03T10%3A00");
 
-        mvc.perform(get("/api/bff/audit").header("Authorization", "Bearer test-token")
+        mvc.perform(get("/api/v1/bff/audit").header("Authorization", "Bearer test-token")
                 .param("user", " ana+ventas@ejemplo.cl & equipo ")
                 .param("action", "RESERVA_CONFIRMADA")
                 .param("inicio", "2026-10-02T10:00").param("fin", "2026-10-03T10:00"))
@@ -81,9 +81,9 @@ class AuditProxyTests {
     @CsvSource({"inicio,2026-10-02T10:00", "fin,2026-10-03T10:00"})
     void aSingleDateBoundIsForwarded(String field, String value) throws Exception {
         authenticate("Admin");
-        expectSuccess("http://backend.test/api/audit?" + field + "=" + value.replace(":", "%3A"));
+        expectSuccess("http://backend.test/api/v1/audit?" + field + "=" + value.replace(":", "%3A"));
 
-        mvc.perform(get("/api/bff/audit").header("Authorization", "Bearer test-token").param(field, value))
+        mvc.perform(get("/api/v1/bff/audit").header("Authorization", "Bearer test-token").param(field, value))
                 .andExpect(status().isOk());
         fixture.server().verify();
     }
@@ -91,9 +91,9 @@ class AuditProxyTests {
     @Test
     void emptyFiltersAreOmittedAndUnknownParametersAreNotForwarded() throws Exception {
         authenticate("Admin");
-        expectSuccess("http://backend.test/api/audit");
+        expectSuccess("http://backend.test/api/v1/audit");
 
-        mvc.perform(get("/api/bff/audit").header("Authorization", "Bearer test-token")
+        mvc.perform(get("/api/v1/bff/audit").header("Authorization", "Bearer test-token")
                 .param("user", "   ").param("action", "").param("inicio", " ").param("fin", "")
                 .param("backend.url", "http://otro-servidor.test"))
                 .andExpect(status().isOk());
@@ -103,12 +103,12 @@ class AuditProxyTests {
     @Test
     void invalidFilterResponseKeepsItsStatusAndExplanation() throws Exception {
         authenticate("Admin");
-        fixture.server().expect(requestTo("http://backend.test/api/audit?inicio=fecha-invalida"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/audit?inicio=fecha-invalida"))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST)
                         .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                         .body("{\"status\":400,\"detail\":\"El filtro inicio debe ser una fecha y hora válida\"}"));
 
-        mvc.perform(get("/api/bff/audit").header("Authorization", "Bearer test-token")
+        mvc.perform(get("/api/v1/bff/audit").header("Authorization", "Bearer test-token")
                 .param("inicio", "fecha-invalida"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
@@ -119,10 +119,10 @@ class AuditProxyTests {
     @Test
     void internalBackendErrorReturnsSanitizedBadGateway() throws Exception {
         authenticate("Admin");
-        fixture.server().expect(requestTo("http://backend.test/api/audit"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/audit"))
                 .andRespond(withServerError().body("SQL y datos internos de prueba"));
 
-        mvc.perform(get("/api/bff/audit").header("Authorization", "Bearer test-token"))
+        mvc.perform(get("/api/v1/bff/audit").header("Authorization", "Bearer test-token"))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.detail").value("No se pudo completar la solicitud; vuelve a intentarlo"));
         fixture.server().verify();

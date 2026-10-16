@@ -1,8 +1,9 @@
 FROM maven:3.9.15-eclipse-temurin-17 AS build
 WORKDIR /app
-COPY pom.xml ./
+COPY ["AndesStayRabbitAdmin/pom.xml", "./pom.xml"]
 RUN mvn -B -ntp dependency:go-offline
-COPY src ./src
+COPY ["AndesStayRabbitAdmin/src", "./src"]
+COPY config/rabbit-topology.properties /config/rabbit-topology.properties
 RUN mvn -B -ntp -DskipTests package
 FROM eclipse-temurin:17-jre-jammy
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* && useradd --uid 10001 --create-home appuser

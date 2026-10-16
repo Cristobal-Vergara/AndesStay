@@ -1,7 +1,6 @@
 package com.example.AndesStay.service;
 
 import org.springframework.amqp.core.*;
-import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import java.nio.charset.StandardCharsets;
@@ -31,9 +30,4 @@ public class MessagingDemoService {
         return id;
     }
 
-    @RabbitListener(queues="#{demoQueue.name}")
-    public void receive(Message message) {
-        // Fallo determinista, exclusivamente en la cola de demostración.
-        throw new IllegalStateException("Prueba controlada de entrega");
-    }
 }

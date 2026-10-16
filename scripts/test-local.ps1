@@ -2,6 +2,7 @@
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $validationDir = Join-Path $projectRoot '.validation'
 New-Item -ItemType Directory -Path $validationDir -Force | Out-Null
+& (Join-Path $PSScriptRoot 'test-rabbit-topology.ps1')
 foreach ($module in @('AndesStay Backend','AndesStayBFF','AndesStayKafkaAdmin','AndesStayRabbitAdmin')) {
     Push-Location (Join-Path $projectRoot $module)
     try {
@@ -26,4 +27,4 @@ try {
         Write-Output "Frontend ${task}: correcto"
     }
 } finally { Pop-Location }
-Write-Output 'Pruebas locales correctas. Para verificar MySQL y brokers, ejecuta scripts/test-mysql.cmd.'
+Write-Output 'Pruebas locales correctas. Para verificar MySQL y brokers, ejecuta scripts/test-mysql.cmd. Para el CRUD real: scripts/test-rabbit-admin.cmd.'

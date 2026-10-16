@@ -12,7 +12,7 @@ import java.util.List;
 import com.example.AndesStay.dto.PageResponse;
 
 @RestController
-@RequestMapping("/api/audit")
+@RequestMapping({"/api/v1/audit", "/api/audit"})
 public class AuditController {
 
     private final AuditService auditService;

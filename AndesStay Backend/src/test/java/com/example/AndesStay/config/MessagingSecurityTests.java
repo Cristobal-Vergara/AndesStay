@@ -31,20 +31,20 @@ class MessagingSecurityTests {
     void statusIsRestrictedToOperations(String role, int expected) throws Exception {
         authenticate(role);
         when(service.status()).thenReturn(new MessagingStatusResponse(true,2L,1L,1L,1L,true,0L,Instant.EPOCH));
-        mvc.perform(get("/api/messaging/status").header("Authorization","Bearer test")).andExpect(status().is(expected));
+        mvc.perform(get("/api/v1/messaging/status").header("Authorization","Bearer test")).andExpect(status().is(expected));
         if(expected==200) verify(service).status(); else verifyNoInteractions(service);
     }
     @ParameterizedTest @CsvSource({"Admin,202", "Recepcionista,403", "Huesped,403", "Auditor,403"})
     void onlyAdminCanSendAnIsolatedDemo(String role,int expected) throws Exception {
         authenticate(role); when(demo.publish()).thenReturn("controlled");
-        mvc.perform(post("/api/messaging/demo").header("Authorization","Bearer test"))
+        mvc.perform(post("/api/v1/messaging/demo").header("Authorization","Bearer test"))
             .andExpect(status().is(expected));
         if(expected==202) verify(demo).publish(); else verifyNoInteractions(demo);
     }
     @Test void anonymousAndOtherMethodsAreDenied() throws Exception {
-        mvc.perform(get("/api/messaging/status")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/messaging/status")).andExpect(status().isUnauthorized());
         authenticate("Admin");
-        mvc.perform(delete("/api/messaging/status").header("Authorization","Bearer test")).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/messaging/status").header("Authorization","Bearer test")).andExpect(status().isForbidden());
         verifyNoInteractions(service,demo);
     }
     private void authenticate(String role) {

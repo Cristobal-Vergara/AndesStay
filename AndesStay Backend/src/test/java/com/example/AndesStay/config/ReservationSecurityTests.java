@@ -72,7 +72,7 @@ class ReservationSecurityTests {
 
     @Test
     void anonymousRequestRequiresAuthentication() throws Exception {
-        mvc.perform(get("/api/reservations")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/reservations")).andExpect(status().isUnauthorized());
         verifyNoInteractions(service);
     }
 
@@ -81,7 +81,7 @@ class ReservationSecurityTests {
         when(decoder.decode("test-token")).thenReturn(Jwt.withTokenValue("test-token")
                 .header("alg", "RS256").subject("test-user").claim("roles", List.of("Admin")).build());
 
-        mvc.perform(patch("/api/reservations/1").header("Authorization", "Bearer test-token")
+        mvc.perform(patch("/api/v1/reservations/1").header("Authorization", "Bearer test-token")
                 .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(service);
@@ -117,7 +117,7 @@ class ReservationSecurityTests {
         when(decoder.decode("test-token")).thenReturn(Jwt.withTokenValue("test-token")
                 .header("alg", "RS256").subject("test-user").claim("roles", List.of("Huesped")).build());
 
-        mvc.perform(post("/api/reservations").header("Authorization", "Bearer test-token")
+        mvc.perform(post("/api/v1/reservations").header("Authorization", "Bearer test-token")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"checkIn\":\"fecha-inválida\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.detail").exists());
         verifyNoInteractions(service);
@@ -125,15 +125,15 @@ class ReservationSecurityTests {
 
     private MockHttpServletRequestBuilder request(String operation) {
         return switch (operation) {
-            case "list" -> get("/api/reservations");
-            case "detail" -> get("/api/reservations/1");
-            case "create" -> post("/api/reservations")
+            case "list" -> get("/api/v1/reservations");
+            case "detail" -> get("/api/v1/reservations/1");
+            case "create" -> post("/api/v1/reservations")
                     .contentType(MediaType.APPLICATION_JSON).content("{}");
-            case "edit" -> put("/api/reservations/1")
+            case "edit" -> put("/api/v1/reservations/1")
                     .contentType(MediaType.APPLICATION_JSON).content("{}");
-            case "status" -> put("/api/reservations/1/status")
+            case "status" -> put("/api/v1/reservations/1/status")
                     .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"CONFIRMADA\"}");
-            case "delete" -> delete("/api/reservations/1");
+            case "delete" -> delete("/api/v1/reservations/1");
             default -> throw new IllegalArgumentException(operation);
         };
     }

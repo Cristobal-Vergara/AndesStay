@@ -83,7 +83,7 @@ describe("catálogo", () => {
         fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
         await waitFor(() => expect(calls.some(call => call.options.method === "PUT")).toBe(true));
         const update = calls.find(call => call.options.method === "PUT");
-        expect(update.url.pathname).toBe("/api/bff/catalog/1");
+        expect(update.url.pathname).toBe("/api/v1/bff/catalog/1");
         expect(JSON.parse(update.options.body)).toMatchObject({ price: "90000.50", capacity: 4, available: true });
     });
     it("muestra la explicación del backend cuando la unidad tiene reservas", async () => {

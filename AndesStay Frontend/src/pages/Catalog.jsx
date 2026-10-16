@@ -22,7 +22,7 @@ export default function Catalog() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
-    const load = useCallback(signal => request(queryPath("/api/bff/catalog", { page, size: 20 }), { signal }).then(requirePage), [request, page]);
+    const load = useCallback(signal => request(queryPath("/api/v1/bff/catalog", { page, size: 20 }), { signal }).then(requirePage), [request, page]);
     const catalog = useResource(load, !!account);
     useEffect(() => {
         if (!showForm) return;
@@ -54,12 +54,12 @@ export default function Catalog() {
         }
         const body = { name: form.name.trim(), type: form.type.trim(), capacity: Number(form.capacity),
             price: form.price, available: form.available, description: form.description };
-        if (await perform(() => request(editing ? `/api/bff/catalog/${editing}` : "/api/bff/catalog",
+        if (await perform(() => request(editing ? `/api/v1/bff/catalog/${editing}` : "/api/v1/bff/catalog",
                 { method: editing ? "PUT" : "POST", body }), "Unidad guardada correctamente.")) cancel();
     };
     const remove = async (unit) => {
         if (!window.confirm(`¿Eliminar la unidad ${unit.name}? Las unidades con reservas conservan su historial y no pueden eliminarse.`)) return;
-        if (await perform(() => request(`/api/bff/catalog/${unit.id}`, { method: "DELETE" }), "Unidad eliminada.")) {
+        if (await perform(() => request(`/api/v1/bff/catalog/${unit.id}`, { method: "DELETE" }), "Unidad eliminada.")) {
             if (catalog.data?.content.length === 1 && page > 0) setPage(page - 1);
             if (editing === unit.id) cancel();
         }
@@ -98,7 +98,7 @@ export default function Catalog() {
                         <StatusBadge tone={unit.available ? "green" : "neutral"}>{unit.available ? "Habilitada" : "Deshabilitada"}</StatusBadge></div>
                     {staff && <div className="unit-actions">
                         <button type="button" disabled={busy} onClick={() => edit(unit)}>Editar</button>
-                        <button type="button" disabled={busy} onClick={() => perform(() => request(`/api/bff/catalog/${unit.id}`,
+                        <button type="button" disabled={busy} onClick={() => perform(() => request(`/api/v1/bff/catalog/${unit.id}`,
                             { method: "PUT", body: { ...unit, available: !unit.available } }),
                             unit.available ? "Unidad deshabilitada." : "Unidad habilitada.")}>{unit.available ? "Deshabilitar" : "Habilitar"}</button>
                         <button type="button" className="button-danger" disabled={busy} onClick={() => remove(unit)}>Eliminar</button>

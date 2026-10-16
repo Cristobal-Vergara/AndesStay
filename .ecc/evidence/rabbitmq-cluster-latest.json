@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-10-14T02:16:06.112Z",
+  "project": "andesstay-cluster-test-ed2c663f",
+  "runId": "e92ca9f5-68df-4da4-8559-45d7750c1e5e",
+  "success": true,
+  "test": {
+    "runId": "e92ca9f5-68df-4da4-8559-45d7750c1e5e",
+    "replicas": 3,
+    "leaderBefore": "rabbit@rabbit1",
+    "leaderAfter": "rabbit@rabbit3",
+    "leaderElectionObservedMs": 1614,
+    "clientReconnectedToAnotherNode": true,
+    "committedEventRedelivered": true,
+    "noticesAfterLeaderFailure": 20,
+    "noConfirmWithoutMajority": true,
+    "majorityRecovered": true,
+    "uniqueEvents": 21,
+    "notices": 21,
+    "inboxReceipts": 21,
+    "success": true
+  },
+  "cleaned": true
+}

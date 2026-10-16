@@ -26,9 +26,9 @@ export default function Reservations() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
-    const load = useCallback(signal => request(queryPath("/api/bff/reservations", { page, size: 20 }), { signal }).then(requirePage), [request, page]);
-    const loadUnits = useCallback(signal => request(queryPath("/api/bff/catalog", { page: unitPage, size: 20 }), { signal }).then(requirePage), [request, unitPage]);
-    const loadAccount = useCallback(signal => request("/api/bff/account", { signal }), [request]);
+    const load = useCallback(signal => request(queryPath("/api/v1/bff/reservations", { page, size: 20 }), { signal }).then(requirePage), [request, page]);
+    const loadUnits = useCallback(signal => request(queryPath("/api/v1/bff/catalog", { page: unitPage, size: 20 }), { signal }).then(requirePage), [request, unitPage]);
+    const loadAccount = useCallback(signal => request("/api/v1/bff/account", { signal }), [request]);
     const reservations = useResource(load, !!account);
     const units = useResource(loadUnits, !!account);
     const identity = useResource(loadAccount, !!account);
@@ -64,7 +64,7 @@ export default function Reservations() {
         if (!form.guestName.trim() || !form.unitId || !form.checkIn || !form.checkOut || form.checkOut <= form.checkIn) {
             setError("Completa los datos y elige una salida posterior a la entrada."); return;
         }
-        if (await perform(() => request(editing ? `/api/bff/reservations/${editing}` : "/api/bff/reservations",
+        if (await perform(() => request(editing ? `/api/v1/bff/reservations/${editing}` : "/api/v1/bff/reservations",
                 { method: editing ? "PUT" : "POST", body: { ...form, guestName: form.guestName.trim(), unitId: Number(form.unitId) } }),
                 editing ? "Reserva actualizada." : "Solicitud creada. Recepción debe confirmar la disponibilidad.")) cancel();
     };
@@ -78,14 +78,14 @@ export default function Reservations() {
     };
     const remove = async reservation => {
         if (!window.confirm(`¿Eliminar la reserva ${reservation.id}? Su evento de eliminación quedará en auditoría.`)) return;
-        if (await perform(() => request(`/api/bff/reservations/${reservation.id}`, { method: "DELETE" }), "Reserva eliminada.")) {
+        if (await perform(() => request(`/api/v1/bff/reservations/${reservation.id}`, { method: "DELETE" }), "Reserva eliminada.")) {
             if (reservations.data?.content.length === 1 && page > 0) setPage(page - 1);
             if (editing === reservation.id) cancel();
         }
     };
     const assign = async event => {
         event.preventDefault();
-        if (await perform(() => request(`/api/bff/reservations/${assigning}` + "/owner",
+        if (await perform(() => request(`/api/v1/bff/reservations/${assigning}` + "/owner",
                 { method: "PUT", body: { objectId: objectId.trim() } }), "Reserva asignada a la cuenta del huésped.")) {
             setAssigning(null); setObjectId("");
         }
@@ -141,7 +141,7 @@ export default function Reservations() {
                 <td><StatusBadge status={reservation.status} /></td>
                 {staff && <td>
                     {!!transitions[reservation.status]?.length && <select aria-label={`Cambiar estado de reserva ${reservation.id}`} value="" disabled={busy}
-                        onChange={event => event.target.value && perform(() => request(`/api/bff/reservations/${reservation.id}/status`,
+                        onChange={event => event.target.value && perform(() => request(`/api/v1/bff/reservations/${reservation.id}/status`,
                             { method: "PUT", body: { status: event.target.value } }), "Estado actualizado.")}>
                         <option value="">Cambiar estado…</option>
                         {transitions[reservation.status].map(state => <option key={state} value={state}>{stateLabels[state]}</option>)}

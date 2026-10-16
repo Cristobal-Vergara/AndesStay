@@ -15,7 +15,7 @@ const dateFormat = new Intl.DateTimeFormat("es-CL", {
 export default function ReservationNotifications({ staff = false }) {
     const { request } = useApi();
     const [page, setPage] = useState(0);
-    const load = useCallback(signal => request(queryPath("/api/bff/notifications", { page, size: 5 }), { signal }).then(requirePage), [request, page]);
+    const load = useCallback(signal => request(queryPath("/api/v1/bff/notifications", { page, size: 5 }), { signal }).then(requirePage), [request, page]);
     const notices = useResource(load);
     return <section className="dashboard-section" aria-labelledby="notification-heading">
         <div className="section-heading">

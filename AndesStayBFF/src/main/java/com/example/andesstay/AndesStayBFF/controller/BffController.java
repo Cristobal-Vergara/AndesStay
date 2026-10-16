@@ -7,7 +7,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/bff")
+@RequestMapping({"/api/v1/bff", "/api/bff"})
 public class BffController {
     private final BffReservationService service;
     public BffController(BffReservationService service) { this.service = service; }
@@ -90,6 +90,25 @@ public class BffController {
     public ResponseEntity<String> notifications(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "0") Integer page, @RequestParam(defaultValue = "5") Integer size) {
         return json(service.getNotifications(jwt.getTokenValue(), page, size));
+    }
+    @GetMapping("/messaging/listeners")
+    public ResponseEntity<String> messagingListeners(@AuthenticationPrincipal Jwt jwt) {
+        return json(service.getMessagingListeners(jwt.getTokenValue()));
+    }
+    @GetMapping("/messaging/listeners/{id}")
+    public ResponseEntity<String> messagingListener(@AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
+        return json(service.getMessagingListener(jwt.getTokenValue(), id));
+    }
+    @PostMapping("/messaging/listeners/{id}/pause")
+    public ResponseEntity<String> pauseMessagingListener(@AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
+        return listenerResult(service.pauseMessagingListener(jwt.getTokenValue(), id));
+    }
+    @PostMapping("/messaging/listeners/{id}/resume")
+    public ResponseEntity<String> resumeMessagingListener(@AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
+        return listenerResult(service.resumeMessagingListener(jwt.getTokenValue(), id));
+    }
+    private ResponseEntity<String> listenerResult(ResponseEntity<String> result) {
+        return ResponseEntity.status(result.getStatusCode()).contentType(MediaType.APPLICATION_JSON).body(result.getBody());
     }
     @GetMapping("/account")
     public ResponseEntity<String> account(@AuthenticationPrincipal Jwt jwt) { return json(service.getAccount(jwt.getTokenValue())); }

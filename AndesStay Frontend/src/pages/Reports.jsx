@@ -9,7 +9,7 @@ import { useResource } from "../hooks/useResource";
 
 export default function Reports() {
     const { request, account, roles } = useApi();
-    const load = useCallback(signal => request("/api/bff/reports", { signal }), [request]);
+    const load = useCallback(signal => request("/api/v1/bff/reports", { signal }), [request]);
     const reports = useResource(load, !!account && roles.includes("Admin"));
     const data = reports.data;
     const hours = Object.entries(data?.reservasPorHora || {}).sort(([a], [b]) => Number(a) - Number(b));

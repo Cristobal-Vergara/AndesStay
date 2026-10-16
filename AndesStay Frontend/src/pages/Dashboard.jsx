@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import MessagingHealth from "../components/MessagingHealth";
+import ListenerControls from "../components/ListenerControls";
 import ReservationNotifications from "../components/ReservationNotifications";
 import KpiCards from "../components/KpiCards";
 import PageHeader from "../components/PageHeader";
@@ -20,9 +21,9 @@ export default function Dashboard() {
     const guest = roles.includes("Huesped") && !staff;
     const auditor = roles.includes("Auditor");
     const [date, setDate] = useState("");
-    const loadKpis = useCallback(signal => request("/api/bff/reports", { signal }), [request]);
-    const loadDaily = useCallback(signal => request(queryPath("/api/bff/reports/operations", { date }), { signal }), [request, date]);
-    const loadOwn = useCallback(signal => request(queryPath("/api/bff/reservations", { page: 0, size: 5 }), { signal }).then(requirePage), [request]);
+    const loadKpis = useCallback(signal => request("/api/v1/bff/reports", { signal }), [request]);
+    const loadDaily = useCallback(signal => request(queryPath("/api/v1/bff/reports/operations", { date }), { signal }), [request, date]);
+    const loadOwn = useCallback(signal => request(queryPath("/api/v1/bff/reservations", { page: 0, size: 5 }), { signal }).then(requirePage), [request]);
     const kpis = useResource(loadKpis, !!account && admin);
     const daily = useResource(loadDaily, !!account && staff);
     const own = useResource(loadOwn, !!account && guest);
@@ -65,6 +66,7 @@ export default function Dashboard() {
         </section>}
         {(staff || guest) && <ReservationNotifications staff={staff} />}
         {staff && <MessagingHealth canDemo={admin} />}
+        {staff && <ListenerControls canManage={admin} />}
         {auditor && <Link className="panel audit-shortcut" to="/audit"><span className="panel-icon"><Icon name="shield" /></span><div><strong>Historial de auditoría</strong><p>Consulta y filtra los movimientos de las reservas.</p></div><Icon name="arrow" /></Link>}
         {!staff && !guest && !auditor && <div className="panel"><EmptyState title="Tu cuenta necesita un rol" description="Solicita al administrador de la organización un rol de AndesStay." icon="shield" /></div>}
         <footer className="page-footer">AndesStay <span>Una buena estadía empieza con los detalles.</span></footer>

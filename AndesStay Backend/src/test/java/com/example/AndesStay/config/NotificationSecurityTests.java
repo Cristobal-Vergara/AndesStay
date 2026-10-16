@@ -29,15 +29,15 @@ class NotificationSecurityTests {
     void onlyBusinessRolesCanRead(String role, int expected) throws Exception {
         authenticate(role);
         when(service.list(2,5)).thenReturn(Page.empty());
-        mvc.perform(get("/api/notifications").header("Authorization","Bearer test")
+        mvc.perform(get("/api/v1/notifications").header("Authorization","Bearer test")
             .param("page","2").param("size","5").param("recipientId","forged"))
             .andExpect(status().is(expected));
         if (expected == 200) verify(service).list(2,5); else verifyNoInteractions(service);
     }
     @Test void unauthenticatedAndManualPublicationAreRejected() throws Exception {
-        mvc.perform(get("/api/notifications")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/notifications")).andExpect(status().isUnauthorized());
         authenticate("Admin");
-        mvc.perform(post("/api/notifications").header("Authorization","Bearer test")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/notifications").header("Authorization","Bearer test")).andExpect(status().isForbidden());
         verifyNoInteractions(service);
     }
     private void authenticate(String role) {

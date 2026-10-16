@@ -1,0 +1,13 @@
+# Los dos servicios Rabbit usan el contexto raiz para compartir la topologia.
+# Solo se envian sus fuentes y la configuracion publica; no secretos ni respaldos.
+**
+!config/
+!config/rabbit-topology.properties
+!AndesStay Backend/
+!AndesStay Backend/pom.xml
+!AndesStay Backend/src/
+!AndesStay Backend/src/**
+!AndesStayRabbitAdmin/
+!AndesStayRabbitAdmin/pom.xml
+!AndesStayRabbitAdmin/src/
+!AndesStayRabbitAdmin/src/**

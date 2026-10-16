@@ -28,11 +28,19 @@ export async function fetchJson(path, token, options = {}) {
             const problem = await response.json().catch(() => null);
             const fallback = response.status === 401 ? "Tu sesión no es válida. Vuelve a iniciar sesión."
                 : response.status === 403 ? "No tienes permiso para realizar esta operación."
+                : response.status === 429 ? "Se enviaron demasiadas solicitudes. Espera unos segundos y vuelve a intentarlo."
                 : response.status >= 500 ? "El servicio no está disponible. Vuelve a intentarlo."
                 : "No se pudo completar la solicitud.";
             const detail = response.status < 500 && typeof problem?.detail === "string" ? problem.detail : fallback;
             const error = new Error(detail);
             error.status = response.status;
+            if (response.status === 429) {
+                const retryAfter = response.headers.get("Retry-After");
+                if (retryAfter !== null && /^\d+$/.test(retryAfter)) {
+                    const seconds = Number(retryAfter);
+                    if (Number.isSafeInteger(seconds)) error.retryAfterSeconds = seconds;
+                }
+            }
             throw error;
         }
         if (response.status === 204) return null;

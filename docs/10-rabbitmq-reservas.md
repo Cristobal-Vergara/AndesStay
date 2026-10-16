@@ -15,7 +15,7 @@ Antes, RabbitMQ recibía solamente la creación de una reserva en una cola y el 
 | Routing key | `reservation.created`, `reservation.confirmed` o `reservation.cancelled`. |
 | Cola general | `andesstay.reservations`, utilizada por recepción. Se conserva la cola existente. |
 | Cola específica | `andesstay.guest-notifications`, utilizada para avisos a huéspedes. |
-| Consumidor con `@RabbitListener` | Dos métodos independientes en `ReservationConsumer`. |
+| Consumidor con `@RabbitListener` | `ReceptionNotificationConsumer` y `GuestNotificationConsumer`, en `messaging/notifications` desde el [paso 13](13-consumidores-por-dominio.md). |
 | Comprobación desde React | Crear o cambiar una reserva y consultar sus avisos en Inicio. |
 
 La segunda guía implementa un **DirectExchange**: compara la clave completa, sin comodines. Aunque su conclusión menciona topics, el código mostrado corresponde a enrutamiento directo. La referencia oficial de [routing con Spring AMQP](https://www.rabbitmq.com/tutorials/tutorial-four-spring-amqp) explica este mismo comportamiento.
@@ -68,7 +68,7 @@ El evento contiene ID de reserva, unidad, fechas, estado y, cuando existe, la id
 
 ### 3. Dos efectos, dos controles de duplicados
 
-`ReservationConsumer.receiveReservation` guarda el aviso de recepción. `receiveGuestNotification` guarda el aviso del huésped cuando corresponde.
+`ReceptionNotificationConsumer.receive` guarda el aviso de recepción. `GuestNotificationConsumer.receive` guarda el aviso del huésped cuando corresponde. Desde el [paso 13](13-consumidores-por-dominio.md), cada entrada tiene su propia clase dentro del dominio de notificaciones.
 
 Sus identificadores de consumidor en inbox son distintos:
 

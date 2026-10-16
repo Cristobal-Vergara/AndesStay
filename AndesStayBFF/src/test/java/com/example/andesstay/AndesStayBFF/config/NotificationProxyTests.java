@@ -31,20 +31,20 @@ class NotificationProxyTests {
     @ParameterizedTest @CsvSource({"Admin", "Recepcionista", "Huesped"})
     void forwardsVerifiedTokenAndPaginationWithoutClientRecipient(String role) throws Exception {
         authenticate(role);
-        fixture.server().expect(requestTo("http://backend.test/api/notifications?page=1&size=5"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/notifications?page=1&size=5"))
             .andExpect(header("Authorization", "Bearer test-token"))
             .andRespond(withSuccess("{\"content\":[],\"page\":1,\"size\":5,\"totalElements\":0,\"totalPages\":0}", MediaType.APPLICATION_JSON));
-        mvc.perform(get("/api/bff/notifications").header("Authorization", "Bearer test-token")
+        mvc.perform(get("/api/v1/bff/notifications").header("Authorization", "Bearer test-token")
             .param("page","1").param("size","5").param("recipientId","another-user"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.page").value(1));
         fixture.server().verify();
     }
     @Test void anonymousAuditorAndManualPublicationCannotContactBackend() throws Exception {
-        mvc.perform(get("/api/bff/notifications")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/bff/notifications")).andExpect(status().isUnauthorized());
         authenticate("Auditor");
-        mvc.perform(get("/api/bff/notifications").header("Authorization","Bearer test-token")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/bff/notifications").header("Authorization","Bearer test-token")).andExpect(status().isForbidden());
         authenticate("Admin");
-        mvc.perform(post("/api/bff/notifications").header("Authorization","Bearer test-token")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/bff/notifications").header("Authorization","Bearer test-token")).andExpect(status().isForbidden());
         fixture.server().verify();
     }
     private void authenticate(String role) {

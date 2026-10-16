@@ -29,32 +29,32 @@ class MessagingProxyTests {
     @BeforeEach void setup() { fixture.server().reset(); }
     @Test void forwardsVerifiedTokenForStatus() throws Exception {
         authenticate("Recepcionista");
-        fixture.server().expect(requestTo("http://backend.test/api/messaging/status"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/messaging/status"))
             .andExpect(header("Authorization","Bearer test-token"))
             .andRespond(withSuccess("{\"available\":false,\"pending\":null}",MediaType.APPLICATION_JSON));
-        mvc.perform(get("/api/bff/messaging/status").header("Authorization","Bearer test-token"))
+        mvc.perform(get("/api/v1/bff/messaging/status").header("Authorization","Bearer test-token"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.available").value(false));
         fixture.server().verify();
     }
     @Test void demoPublishesToFixedPathWithoutForwardingClientPayload() throws Exception {
         authenticate("Admin");
-        fixture.server().expect(requestTo("http://backend.test/api/messaging/demo"))
+        fixture.server().expect(requestTo("http://backend.test/api/v1/messaging/demo"))
             .andExpect(method(HttpMethod.POST)).andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.content().string(""))
             .andExpect(header("Authorization","Bearer test-token"))
             .andRespond(withStatus(HttpStatus.ACCEPTED).contentType(MediaType.APPLICATION_JSON).body("{\"eventId\":\"safe\"}"));
-        mvc.perform(post("/api/bff/messaging/demo").header("Authorization","Bearer test-token")
+        mvc.perform(post("/api/v1/bff/messaging/demo").header("Authorization","Bearer test-token")
             .contentType(MediaType.APPLICATION_JSON).content("{\"queue\":\"forged\",\"payload\":\"forged\"}"))
             .andExpect(status().isAccepted()).andExpect(jsonPath("$.eventId").value("safe"));
         fixture.server().verify();
     }
     @Test void unauthorizedRolesCannotContactBackend() throws Exception {
-        mvc.perform(get("/api/bff/messaging/status")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/bff/messaging/status")).andExpect(status().isUnauthorized());
         for(String role:List.of("Huesped","Auditor")) {
             authenticate(role);
-            mvc.perform(get("/api/bff/messaging/status").header("Authorization","Bearer test-token")).andExpect(status().isForbidden());
+            mvc.perform(get("/api/v1/bff/messaging/status").header("Authorization","Bearer test-token")).andExpect(status().isForbidden());
         }
         authenticate("Recepcionista");
-        mvc.perform(post("/api/bff/messaging/demo").header("Authorization","Bearer test-token")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/bff/messaging/demo").header("Authorization","Bearer test-token")).andExpect(status().isForbidden());
         fixture.server().verify();
     }
     private void authenticate(String role) {

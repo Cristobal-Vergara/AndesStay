@@ -54,7 +54,7 @@ describe("Registro con identidad Microsoft",()=>{
         fireEvent.click(screen.getByRole("button",{name:"Completar registro"}));
         await screen.findByText("Tu perfil se registró correctamente.");
         const post=calls.find(call=>call.options.method==="POST");
-        expect(post.url.pathname).toBe("/api/bff/account/register");
+        expect(post.url.pathname).toBe("/api/v1/bff/account/register");
         expect(JSON.parse(post.options.body)).toEqual({displayName:"Ana Torres"});
         expect(post.options.headers.Authorization).toBe("Bearer verified-token");
         expect(screen.queryByLabelText(/contraseña/i)).toBeNull();

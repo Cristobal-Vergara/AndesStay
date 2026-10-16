@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
-@RequestMapping("/api/reports")
+@RequestMapping({"/api/v1/reports", "/api/reports"})
 public class ReportController {
 
     private final ReportService reportService;

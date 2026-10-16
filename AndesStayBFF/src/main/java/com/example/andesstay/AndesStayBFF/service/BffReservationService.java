@@ -2,6 +2,7 @@ package com.example.andesstay.AndesStayBFF.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -21,56 +22,71 @@ public class BffReservationService {
 
     public String getReservations(String token) { return getReservations(token, null, null); }
     public String getReservations(String token, Integer page, Integer size) {
-        return get(token, "/api/reservations", pagination(page, size));
+        return get(token, "/api/v1/reservations", pagination(page, size));
     }
     public String getReservation(String token, Long id) {
-        return get(token, "/api/reservations/" + id, Map.of());
+        return get(token, "/api/v1/reservations/" + id, Map.of());
     }
     public String createReservation(String token, String body) {
-        return client.post().uri("/api/reservations").contentType(MediaType.APPLICATION_JSON)
+        return client.post().uri("/api/v1/reservations").contentType(MediaType.APPLICATION_JSON)
                 .headers(headers -> headers.setBearerAuth(token)).body(body).retrieve().body(String.class);
     }
     public String updateReservation(String token, Long id, String body) {
-        return put(token, "/api/reservations/" + id, body);
+        return put(token, "/api/v1/reservations/" + id, body);
     }
     public String updateReservationStatus(String token, Long id, String body) {
-        return put(token, "/api/reservations/" + id + "/status", body);
+        return put(token, "/api/v1/reservations/" + id + "/status", body);
     }
     public String assignOwner(String token, Long id, String body) {
-        return put(token, "/api/reservations/" + id + "/owner", body);
+        return put(token, "/api/v1/reservations/" + id + "/owner", body);
     }
-    public void deleteReservation(String token, Long id) { delete(token, "/api/reservations/" + id); }
+    public void deleteReservation(String token, Long id) { delete(token, "/api/v1/reservations/" + id); }
 
     public String getCatalog(String token) { return getCatalog(token, null, null); }
     public String getCatalog(String token, Integer page, Integer size) {
-        return get(token, "/api/catalog/units", pagination(page, size));
+        return get(token, "/api/v1/catalog/units", pagination(page, size));
     }
-    public String getUnit(String token, Long id) { return get(token, "/api/catalog/units/" + id, Map.of()); }
+    public String getUnit(String token, Long id) { return get(token, "/api/v1/catalog/units/" + id, Map.of()); }
     public String createUnit(String token, String body) {
-        return client.post().uri("/api/catalog/units").contentType(MediaType.APPLICATION_JSON)
+        return client.post().uri("/api/v1/catalog/units").contentType(MediaType.APPLICATION_JSON)
                 .headers(headers -> headers.setBearerAuth(token)).body(body).retrieve().body(String.class);
     }
-    public String updateUnit(String token, Long id, String body) { return put(token, "/api/catalog/units/" + id, body); }
-    public void deleteUnit(String token, Long id) { delete(token, "/api/catalog/units/" + id); }
+    public String updateUnit(String token, Long id, String body) { return put(token, "/api/v1/catalog/units/" + id, body); }
+    public void deleteUnit(String token, Long id) { delete(token, "/api/v1/catalog/units/" + id); }
 
-    public String getReports(String token) { return get(token, "/api/reports/kpis", Map.of()); }
+    public String getReports(String token) { return get(token, "/api/v1/reports/kpis", Map.of()); }
     public String getOperations(String token, String date) {
         Map<String, String> filters = new LinkedHashMap<>();
         addFilter(filters, "date", date);
-        return get(token, "/api/reports/operations", filters);
+        return get(token, "/api/v1/reports/operations", filters);
     }
     public String getMessagingStatus(String token) {
-        return get(token, "/api/messaging/status", Map.of());
+        return get(token, "/api/v1/messaging/status", Map.of());
     }
     public String publishMessagingDemo(String token) {
-        return client.post().uri("/api/messaging/demo").headers(headers -> headers.setBearerAuth(token))
+        return client.post().uri("/api/v1/messaging/demo").headers(headers -> headers.setBearerAuth(token))
                 .retrieve().body(String.class);
     }
-    public String getNotifications(String token, Integer page, Integer size) {
-        return get(token, "/api/notifications", pagination(page, size));
+    public String getMessagingListeners(String token) {
+        return get(token, "/api/v1/messaging/listeners", Map.of());
     }
-    public String getAccount(String token) { return get(token, "/api/account", Map.of()); }
-    public String getProfile(String token) { return get(token, "/api/account/profile", Map.of()); }
+    public String getMessagingListener(String token, String id) {
+        return client.get().uri("/api/v1/messaging/listeners/{id}", id)
+                .headers(headers -> headers.setBearerAuth(token)).retrieve().body(String.class);
+    }
+    public ResponseEntity<String> pauseMessagingListener(String token, String id) {
+        return client.post().uri("/api/v1/messaging/listeners/{id}/pause", id)
+                .headers(headers -> headers.setBearerAuth(token)).retrieve().toEntity(String.class);
+    }
+    public ResponseEntity<String> resumeMessagingListener(String token, String id) {
+        return client.post().uri("/api/v1/messaging/listeners/{id}/resume", id)
+                .headers(headers -> headers.setBearerAuth(token)).retrieve().toEntity(String.class);
+    }
+    public String getNotifications(String token, Integer page, Integer size) {
+        return get(token, "/api/v1/notifications", pagination(page, size));
+    }
+    public String getAccount(String token) { return get(token, "/api/v1/account", Map.of()); }
+    public String getProfile(String token) { return get(token, "/api/v1/account/profile", Map.of()); }
     public boolean hasRegisteredGuestProfile(String token) {
         try {
             String body = getProfile(token);
@@ -87,7 +103,7 @@ public class BffReservationService {
         }
     }
     public String registerProfile(String token, String body) {
-        return client.post().uri("/api/account/register").contentType(MediaType.APPLICATION_JSON)
+        return client.post().uri("/api/v1/account/register").contentType(MediaType.APPLICATION_JSON)
                 .headers(headers -> headers.setBearerAuth(token)).body(body).retrieve().body(String.class);
     }
 
@@ -99,7 +115,7 @@ public class BffReservationService {
         addFilter(filters, "user", user); addFilter(filters, "action", action);
         addFilter(filters, "inicio", inicio); addFilter(filters, "fin", fin);
         filters.putAll(pagination(page, size));
-        return get(token, "/api/audit", filters);
+        return get(token, "/api/v1/audit", filters);
     }
 
     private String get(String token, String path, Map<String, String> filters) {

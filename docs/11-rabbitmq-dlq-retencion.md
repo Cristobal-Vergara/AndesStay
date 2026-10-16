@@ -4,7 +4,7 @@ Adaptación de la guía «2.2.3 DLX DLQ, políticas de retención y alertas» al
 
 ## Qué cambia y por qué
 
-Antes, un error permanente de un consumidor RabbitMQ podía provocar entregas repetidas indefinidamente. Ahora se hacen **tres intentos en total**: el inicial y dos reintentos, con esperas de 1 y 2 segundos. Si todos fallan, el backend rechaza sin reencolar y RabbitMQ envía el mensaje al exchange de mensajes fallidos (DLX), que lo enruta a la cola de cuarentena (DLQ).
+Antes, un error permanente de un consumidor RabbitMQ podía provocar entregas repetidas indefinidamente. Desde el [paso 14](14-ack-manual-y-clasificacion-de-errores.md), los permanentes se rechazan inmediatamente y los temporales o no clasificados tienen **hasta tres intentos en total**: el inicial y dos reintentos, con esperas de 1 y 2 segundos. Si todos fallan, el backend rechaza sin reencolar y RabbitMQ envía el mensaje al exchange de mensajes fallidos (DLX), que lo enruta a la cola de cuarentena (DLQ).
 
 Un fallo transitorio puede resolverse en esos intentos. Un fallo permanente queda separado y permite seguir procesando otros avisos. Esto no cambia el estado de la reserva: los consumidores procesan avisos y la reserva ya fue guardada junto con su outbox.
 
@@ -25,7 +25,7 @@ flowchart LR
 
 El DLX es fanout: todas las entregas fallidas llegan a una DLQ común. RabbitMQ agrega la cabecera `x-death`, que permite identificar la cola original y el motivo, como `rejected`, `expired` o `maxlen`. Una misma reserva puede tener una copia para recepción y otra para el huésped; el conteo de la DLQ representa mensajes, no reservas únicas.
 
-Se conserva el ACK automático de Spring: confirma cuando termina el procesamiento, con prefetch 1 por consumidor. Las excepciones salen del listener para que el mecanismo de reintento pueda verlas. Atrapar el error y rechazar inmediatamente, como hace el ejemplo de la guía, impediría esos reintentos. La transacción de inbox y del aviso se revierte en cada fallo; si el procesamiento se repite después de un éxito, el ID evita crear otro aviso.
+Desde el [paso 14](14-ack-manual-y-clasificacion-de-errores.md), cada listener usa ACK manual y un handler compartido confirma después del commit. El handler reintenta únicamente el procesamiento, clasifica los permanentes y rechaza sin reencolar al agotar el presupuesto. ACK/NACK quedan fuera del callback de reintento, con prefetch 1. La transacción de inbox y del aviso se revierte en cada fallo; si el procesamiento se repite después de un éxito, el ID evita crear otro aviso.
 
 La **DLQ real no tiene un consumidor automático**. Consumirla solo para imprimir un log vaciaría la cuarentena antes de que alguien pudiera revisarla.
 
@@ -44,7 +44,7 @@ La retención afecta a los mensajes en RabbitMQ, no a las reservas, el historial
 
 Las colas existentes reciben TTL, límite y DLX mediante **políticas del broker**, recomendadas por [RabbitMQ](https://www.rabbitmq.com/docs/dlx). Así no se cambian sus argumentos de declaración, lo que exigiría recrearlas y podría causar `PRECONDITION_FAILED`. La [documentación de TTL](https://www.rabbitmq.com/docs/ttl) explica la caducidad de mensajes.
 
-`docker/rabbitmq-definitions.json` contiene las dos políticas, el DLX fanout, la DLQ y su binding. El trabajo Docker `rabbit-setup` importa esas definiciones después de que RabbitMQ esté saludable y antes de iniciar el backend. Al terminar aparece como **Exited (0)**; es un trabajo de configuración y no un servicio que deba permanecer activo. Se conservan el usuario, sus permisos y el volumen existente.
+Desde el [paso 12](12-topologia-rabbitmq-centralizada.md), `config/rabbit-topology.properties` es la fuente de nombres y límites. El arranque genera `.validation/rabbitmq-definitions.json` con las dos políticas, el DLX fanout, la DLQ y su binding. El trabajo Docker `rabbit-setup` importa esas definiciones después de que RabbitMQ esté saludable y antes de iniciar el backend. Al terminar aparece como **Exited (0)**; es un trabajo de configuración y no un servicio que deba permanecer activo. Se conservan el usuario, sus permisos y el volumen existente.
 
 ## Alertas en AndesStay
 
@@ -92,15 +92,16 @@ Para inspeccionar cabeceras, abre `http://localhost:15672` con el usuario local 
 | Backend: `config/RabbitDeliveryConfig.java` | Recuperación final: rechazar sin reencolar y log sin cuerpo del mensaje |
 | Backend: `resources/rabbit-delivery.properties` | Reintentos, ACK, prefetch y tiempos; compartidos por aplicación y pruebas |
 | Backend: `service/MessagingStatusService.java` | Lectura real y estado desconocido ante fallos |
-| Backend: `config/RabbitDemoConfig.java`, `service/MessagingDemoService.java` | Topología y fallo controlado de la demo |
+| Backend: `config/RabbitDemoConfig.java`, `service/MessagingDemoService.java`, `messaging/demo/DeliveryDemoConsumer.java` | Topología, publicación y consumo de la demo, separados desde el [paso 13](13-consumidores-por-dominio.md) |
 | Backend: `controller/MessagingController.java`, `dto/MessagingStatusResponse.java` | API de estado y prueba |
 | Backend y BFF: `config/SecurityConfig.java` | Permisos según método y ruta |
 | BFF: `BffController.java`, `BffReservationService.java` | Proxy a rutas fijas con el token original |
 | Frontend: `components/MessagingHealth.jsx`, `pages/Dashboard.jsx`, `index.css` | Panel, sondeo, prueba y estilos |
-| Docker: `rabbitmq-definitions.json`, `docker-compose.yml` | Políticas y trabajo de importación |
+| `config/rabbit-topology.properties`, `scripts/export-rabbit-topology.ps1` | Fuente compartida y generación de políticas |
+| Docker: `docker-compose.yml` | Importación de definiciones generadas |
 | `scripts/test-mysql.ps1` | Configura el puerto de gestión para las pruebas temporales |
 
-La versión utilizada de Spring Boot 4.1 configura `max-retries=2`, es decir, dos reintentos además del primer intento. Consulta las [propiedades oficiales](https://docs.spring.io/spring-boot/appendix/application-properties/index.html) y la [recuperación de errores de Spring AMQP](https://docs.spring.io/spring-amqp/reference/amqp/resilience-recovering-from-errors-and-broker-failures.html).
+Desde el [paso 14](14-ack-manual-y-clasificacion-de-errores.md), `RetryPolicy` de Spring Framework 7 configura `maxRetries(2)`, es decir, dos reintentos además del primer intento. Consulta la [API de RetryPolicy](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/core/retry/RetryPolicy.Builder.html) y la [recuperación de errores de Spring AMQP](https://docs.spring.io/spring-amqp/reference/amqp/resilience-recovering-from-errors-and-broker-failures.html).
 
 ## Pruebas y límites
 
@@ -108,7 +109,7 @@ Verificado el 5 de octubre de 2026: backend 187 pruebas aprobadas y 3 externas o
 
 `scripts/test-local.cmd` verifica el backend, el BFF y el frontend. `scripts/test-mysql.cmd`, con Docker iniciado, utiliza esquemas MySQL, colas, exchanges y políticas temporales con prefijo aleatorio; elimina únicamente esos recursos al terminar y comprueba la huella del respaldo SQL.
 
-La prueba real conserva el recorrido crear → confirmar → cancelar y la privacidad de los avisos. Además comprueba un mensaje inválido con tres intentos y rollback de inbox, un fallo transitorio que se resuelve en el tercer intento, cabeceras `x-death`, una demo sin escritura de reservas y caducidad de su cuarentena, caducidad de la cola de origen, desbordamiento por longitud y retención de la DLQ. Los TTL temporales son cortos para poder verificarlos automáticamente; no alteran las políticas de las colas de AndesStay.
+La prueba real conserva el recorrido crear → confirmar → cancelar y la privacidad de los avisos. Desde el [paso 14](14-ack-manual-y-clasificacion-de-errores.md), también comprueba mensajes inválidos de recepción y huéspedes rechazados sin reintentos y con rollback de inbox, un fallo transitorio recuperado en el tercer intento, otro agotado, y una reentrega real tras perder el canal después del commit y antes del ACK. Conserva las cabeceras `x-death`, la demo sin escritura de reservas, la caducidad de origen y cuarentena, el desbordamiento por longitud y la retención de la DLQ. Los TTL temporales son cortos para poder verificarlos automáticamente; no alteran las políticas de las colas de AndesStay.
 
 La DLQ permite investigar; no implementa todavía corrección o republicación de mensajes. El flujo mantiene confirmaciones del productor e idempotencia del consumidor, pero las colas clásicas de este entorno de desarrollo no garantizan ausencia de pérdidas en todos los fallos del broker durante el traslado al DLX. Para un despliegue con esas exigencias habría que evaluar colas quorum y dead-lettering al menos una vez según la [documentación oficial](https://www.rabbitmq.com/docs/dlx).
 

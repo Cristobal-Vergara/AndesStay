@@ -8,6 +8,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.Map;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -25,7 +26,7 @@ class BrokerGatewayTests {
             assertEquals(MessageDeliveryMode.PERSISTENT,message.getMessageProperties().getDeliveryMode());
             correlation.getFuture().complete(new CorrelationData.Confirm(true,null)); return null;
         }).when(rabbit).send(anyString(),anyString(),any(Message.class),any(CorrelationData.class));
-        new BrokerGateway(rabbit,kafka(),1,exchange()).publish(event("RABBITMQ"));
+        new BrokerGateway(rabbit,kafka(),1,exchange(),routingKeys()).publish(event("RABBITMQ"));
     }
     @Test void rabbitNegativeConfirmationAndReturnedMessageFailDelivery() {
         for(boolean returned:new boolean[]{false,true}) {
@@ -35,16 +36,16 @@ class BrokerGatewayTests {
                 if(returned) correlation.setReturned(new ReturnedMessage(new Message(new byte[0]),312,"NO_ROUTE","","missing"));
                 correlation.getFuture().complete(new CorrelationData.Confirm(returned,"Rejected")); return null;
             }).when(rabbit).send(anyString(),anyString(),any(Message.class),any(CorrelationData.class));
-            assertThrows(IllegalStateException.class,()->new BrokerGateway(rabbit,kafka(),1,exchange()).publish(event("RABBITMQ")));
+            assertThrows(IllegalStateException.class,()->new BrokerGateway(rabbit,kafka(),1,exchange(),routingKeys()).publish(event("RABBITMQ")));
         }
     }
     @Test void absentRabbitConfirmationTimesOut() {
-        assertThrows(TimeoutException.class,()->new BrokerGateway(mock(RabbitTemplate.class),kafka(),0,exchange()).publish(event("RABBITMQ")));
+        assertThrows(TimeoutException.class,()->new BrokerGateway(mock(RabbitTemplate.class),kafka(),0,exchange(),routingKeys()).publish(event("RABBITMQ")));
     }
     @Test void kafkaFailureCannotBeTreatedAsPublished() {
         var kafka=kafka();
         when(kafka.send(anyString(),anyString(),anyString())).thenReturn(CompletableFuture.failedFuture(new IllegalStateException("offline")));
-        assertThrows(ExecutionException.class,()->new BrokerGateway(mock(RabbitTemplate.class),kafka,1,exchange()).publish(event("KAFKA")));
+        assertThrows(ExecutionException.class,()->new BrokerGateway(mock(RabbitTemplate.class),kafka,1,exchange(),routingKeys()).publish(event("KAFKA")));
     }
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
@@ -59,16 +60,21 @@ class BrokerGatewayTests {
             return null;
         }).when(rabbit).send(anyString(),anyString(),any(Message.class),any(CorrelationData.class));
         var event=new OutboxEvent(UUID.randomUUID().toString(),"RABBITMQ","{\"type\":\""+type+"\"}",LocalDateTime.now());
-        new BrokerGateway(rabbit,kafka(),1,exchange()).publish(event);
+        new BrokerGateway(rabbit,kafka(),1,exchange(),routingKeys()).publish(event);
     }
     @Test void unknownEventDoesNotSilentlyUseAnUnroutableKey() {
         var rabbit=mock(RabbitTemplate.class);
         var event=new OutboxEvent(UUID.randomUUID().toString(),"RABBITMQ","{\"type\":\"UNKNOWN\"}",LocalDateTime.now());
-        assertThrows(IllegalArgumentException.class, () -> new BrokerGateway(rabbit,kafka(),1,exchange()).publish(event));
+        assertThrows(IllegalArgumentException.class, () -> new BrokerGateway(rabbit,kafka(),1,exchange(),routingKeys()).publish(event));
         verifyNoInteractions(rabbit);
     }
     private DirectExchange exchange() {
-        return new DirectExchange(com.example.AndesStay.config.RabbitMQConfig.EXCHANGE);
+        return new DirectExchange("test.reservations.exchange");
+    }
+    private Map<ReservationEventType, String> routingKeys() {
+        return Map.of(ReservationEventType.RESERVATION_CREATED, "reservation.created",
+            ReservationEventType.RESERVATION_CONFIRMED, "reservation.confirmed",
+            ReservationEventType.RESERVATION_CANCELLED, "reservation.cancelled");
     }
     @SuppressWarnings("unchecked") private KafkaTemplate<String,String> kafka(){return mock(KafkaTemplate.class);}
     private OutboxEvent event(String destination) { return new OutboxEvent(UUID.randomUUID().toString(),destination,"{\"type\":\"RESERVATION_CREATED\"}",LocalDateTime.now()); }

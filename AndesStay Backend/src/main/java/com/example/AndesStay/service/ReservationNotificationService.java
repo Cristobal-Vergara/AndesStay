@@ -10,6 +10,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import java.time.*;
 
 @Service
@@ -31,7 +33,14 @@ public class ReservationNotificationService {
             log.info("Entrega de texto anterior conservada en inbox");
             return;
         }
-        var envelope = JSON.readTree(payload);
+        JsonNode envelope;
+        try { envelope = JSON.readTree(payload); }
+        catch (JacksonException failure) {
+            throw new InvalidNotificationEventException("El aviso necesita un JSON válido", failure);
+        }
+        if (envelope == null || !envelope.isObject()) {
+            throw new InvalidNotificationEventException("El aviso necesita un objeto JSON");
+        }
         // Las entregas antiguas sin un tipo de reserva se mantienen registradas en inbox.
         ReservationEventType type;
         try { type = ReservationEventType.valueOf(envelope.path("type").asString()); }
@@ -45,13 +54,17 @@ public class ReservationNotificationService {
         String recipient = guest ? data.path("ownerId").asString() : null;
         if (guest && (recipient == null || !recipient.matches(
                 "[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}:[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"))) {
-            throw new IllegalArgumentException("El aviso de huésped necesita una identidad válida");
+            throw new InvalidNotificationEventException("El aviso de huésped necesita una identidad válida");
         }
         long reservationId = data.path("reservationId").asLong();
         long unitId = data.path("unitId").asLong();
-        if (reservationId <= 0 || unitId <= 0) throw new IllegalArgumentException("El aviso necesita una reserva y una unidad");
+        if (reservationId <= 0 || unitId <= 0) throw new InvalidNotificationEventException("El aviso necesita una reserva y una unidad");
         String timestamp = envelope.path("occurredAt").asString();
-        Instant occurredAt = timestamp == null || timestamp.isBlank() ? clock.instant() : Instant.parse(timestamp);
+        Instant occurredAt;
+        try { occurredAt = timestamp == null || timestamp.isBlank() ? clock.instant() : Instant.parse(timestamp); }
+        catch (java.time.format.DateTimeParseException failure) {
+            throw new InvalidNotificationEventException("El aviso necesita una fecha válida", failure);
+        }
         repository.save(new ReservationNotification(guest ? "GUEST" : "RECEPTION", recipient,
                 reservationId, unitId, type.status(), LocalDateTime.ofInstant(occurredAt, ZoneOffset.UTC)));
     }

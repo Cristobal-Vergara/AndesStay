@@ -430,4 +430,11 @@ form .pagination span { font-size: .65rem; }
 .delivery-demo > div { flex: 1; min-width: 180px; }
 .delivery-demo > p { flex-basis: 100%; }
 .delivery-demo strong { font-size: .85rem; }
+.listener-panel > p { font-size: .8rem; line-height: 1.7; }
+.listener-panel > p:first-child { margin-top: 0; }
+.listener-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; border-top: 1px solid var(--line); }
+.listener-name { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.listener-name > strong { font-size: .85rem; }
+.listener-row button { min-width: 105px; }
+@media (max-width: 600px) { .listener-row { flex-wrap: wrap; } .listener-row button { width: 100%; } }
 @media (max-width: 600px) { .delivery-demo button { width: 100%; } .delivery-counts { gap: 30px; } }

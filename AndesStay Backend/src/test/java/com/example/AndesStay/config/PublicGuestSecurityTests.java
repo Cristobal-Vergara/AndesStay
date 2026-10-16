@@ -35,40 +35,40 @@ class PublicGuestSecurityTests {
         authenticate("access_as_user",null,"customer");
     }
     @Test void registeredDelegatedIdentityWithoutEntraRolesCanReadAndCreateOwnReservations() throws Exception {
-        mvc.perform(get("/api/reservations").header("Authorization","Bearer public")).andExpect(status().isOk());
-        mvc.perform(post("/api/reservations").header("Authorization","Bearer public")
+        mvc.perform(get("/api/v1/reservations").header("Authorization","Bearer public")).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/reservations").header("Authorization","Bearer public")
             .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isOk());
         verify(profiles,times(2)).existsByOwnerKey("tenant:customer");
     }
     @Test void unregisteredIdentityDoesNotGetGuestAccess() throws Exception {
         when(profiles.existsByOwnerKey("tenant:customer")).thenReturn(false);
-        mvc.perform(get("/api/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
         verifyNoInteractions(service);
     }
     @ParameterizedTest @ValueSource(strings={"","other_scope","access_as_user_extra"})
     void absentOrWrongDelegatedPermissionCannotGetAutomaticGuestAccess(String scope) throws Exception {
         authenticate(scope,null,"customer");
-        mvc.perform(get("/api/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
         verifyNoInteractions(profiles,service);
     }
     @Test void anotherUserCannotUseAnExistingProfile() throws Exception {
         authenticate("access_as_user",null,"another");
-        mvc.perform(get("/api/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
         verify(profiles).existsByOwnerKey("tenant:another"); verifyNoInteractions(service);
     }
     @Test void auditorDoesNotGainGuestAccessThroughRegistration() throws Exception {
         authenticate("access_as_user","Auditor","customer");
-        mvc.perform(get("/api/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/reservations").header("Authorization","Bearer public")).andExpect(status().isForbidden());
         verifyNoInteractions(profiles,service);
     }
     @Test void guestCannotUseAnyPrivilegedOperation() throws Exception {
-        for(String path:List.of("/api/reservations/1","/api/reservations/1/status","/api/reservations/1/owner","/api/catalog/units/1")) {
+        for(String path:List.of("/api/v1/reservations/1","/api/v1/reservations/1/status","/api/v1/reservations/1/owner","/api/v1/catalog/units/1")) {
             mvc.perform(put(path).header("Authorization","Bearer public").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isForbidden());
         }
-        for(String path:List.of("/api/reservations/1","/api/catalog/units/1"))
+        for(String path:List.of("/api/v1/reservations/1","/api/v1/catalog/units/1"))
             mvc.perform(delete(path).header("Authorization","Bearer public")).andExpect(status().isForbidden());
-        for(String path:List.of("/api/reports/kpis","/api/audit","/actuator/info"))
+        for(String path:List.of("/api/v1/reports/kpis","/api/v1/audit","/actuator/info"))
             mvc.perform(get(path).header("Authorization","Bearer public")).andExpect(status().isForbidden());
         verifyNoInteractions(service);
     }
